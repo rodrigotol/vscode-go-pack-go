@@ -1,0 +1,19 @@
+{
+  "name": "go-pack-go",
+  "displayName": "Go Pack Go",
+  "description": "A curated VS Code extension pack for Go development.",
+  "version": "0.0.1",
+  "publisher": "rodriag",
+  "engines": {
+    "vscode": "^1.90.0"
+  },
+  "categories": [
+    "Extension Packs"
+  ],
+  "keywords": [
+    "go",
+    "golang",
+    "extension-pack"
+  ],
+  "extensionPack": []
+}
