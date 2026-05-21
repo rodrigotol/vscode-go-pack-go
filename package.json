@@ -4,6 +4,7 @@
   "description": "A curated VS Code extension pack for Go development.",
   "version": "0.0.1",
   "publisher": "rodriag",
+  "main": "./out/extension.js",
   "engines": {
     "vscode": "^1.90.0"
   },
@@ -15,5 +16,23 @@
     "golang",
     "extension-pack"
   ],
-  "extensionPack": []
+  "activationEvents": [
+    "onLanguage:go"
+  ],
+  "extensionPack": [],
+  "scripts": {
+    "vscode:prepublish": "npm run compile",
+    "compile": "tsc -p ./",
+    "watch": "tsc -watch -p ./",
+    "test": "npm run compile"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.41",
+    "@types/vscode": "^1.90.0",
+    "typescript": "^5.5.2"
+  },
+  "dependencies": {
+    "tree-sitter-wasms": "^0.1.13",
+    "web-tree-sitter": "^0.20.8"
+  }
 }
