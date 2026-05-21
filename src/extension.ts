@@ -1,5 +1,7 @@
+import * as path from 'path';
 import * as vscode from 'vscode';
 
+import { createGoTestRunPattern } from './goTestRun';
 import {
   createTableTestCodeLensDescriptors,
   debugTableTestScenarioCommand,
@@ -7,9 +9,6 @@ import {
   TableTestScenarioCommandArgument,
 } from './testTableCodeLens';
 import { detectTestTableScenarios, SourceRange } from './testTableDetector';
-
-const goRunSubtestAtCursorCommand = 'go.subtest.cursor';
-const goDebugSubtestAtCursorCommand = 'go.debug.subtest.cursor';
 
 interface VsCodeTableTestScenarioCommandArgument {
   readonly uri: vscode.Uri;
@@ -25,10 +24,10 @@ export function activate(context: vscode.ExtensionContext): void {
       vscode.window.showInformationMessage('Go Pack Go is active.');
     }),
     vscode.commands.registerCommand(runTableTestScenarioCommand, (argument: VsCodeTableTestScenarioCommandArgument) =>
-      delegateScenarioToGoExtension(argument, goRunSubtestAtCursorCommand),
+      runTableTestScenario(argument),
     ),
     vscode.commands.registerCommand(debugTableTestScenarioCommand, (argument: VsCodeTableTestScenarioCommandArgument) =>
-      delegateScenarioToGoExtension(argument, goDebugSubtestAtCursorCommand),
+      debugTableTestScenario(argument),
     ),
     vscode.languages.registerCodeLensProvider(
       { language: 'go', scheme: '*' },
@@ -69,13 +68,65 @@ function isGoTestDocument(document: vscode.TextDocument): boolean {
   return document.languageId === 'go' && document.fileName.endsWith('_test.go');
 }
 
-async function delegateScenarioToGoExtension(
-  argument: VsCodeTableTestScenarioCommandArgument,
-  goCommand: string,
-): Promise<void> {
+async function runTableTestScenario(argument: VsCodeTableTestScenarioCommandArgument): Promise<void> {
+  const context = await prepareScenarioCommand(argument);
+  if (!context) {
+    return;
+  }
+
+  const task = new vscode.Task(
+    { type: 'go-pack-go', task: 'runTableTestScenario' },
+    context.workspaceFolder ?? vscode.TaskScope.Workspace,
+    `go test ${context.argument.testName}/${context.argument.label}`,
+    'go-pack-go',
+    new vscode.ShellExecution('go', ['test', '-run', context.runPattern], {
+      cwd: path.dirname(context.argument.uri.fsPath),
+    }),
+    [],
+  );
+
+  task.presentationOptions = {
+    reveal: vscode.TaskRevealKind.Always,
+    panel: vscode.TaskPanelKind.Shared,
+    clear: true,
+  };
+
+  await vscode.tasks.executeTask(task);
+}
+
+async function debugTableTestScenario(argument: VsCodeTableTestScenarioCommandArgument): Promise<void> {
+  const context = await prepareScenarioCommand(argument);
+  if (!context) {
+    return;
+  }
+
+  const started = await vscode.debug.startDebugging(context.workspaceFolder, {
+    name: `Debug ${context.argument.testName}/${context.argument.label}`,
+    type: 'go',
+    request: 'launch',
+    mode: 'test',
+    program: path.dirname(context.argument.uri.fsPath),
+    args: ['-test.run', context.runPattern],
+  });
+
+  if (!started) {
+    vscode.window.showErrorMessage('Unable to start Go debugger for the selected table test scenario.');
+  }
+}
+
+async function prepareScenarioCommand(argument: VsCodeTableTestScenarioCommandArgument): Promise<{
+  readonly argument: VsCodeTableTestScenarioCommandArgument;
+  readonly runPattern: string;
+  readonly workspaceFolder: vscode.WorkspaceFolder | undefined;
+} | undefined> {
   if (!isScenarioCommandArgument(argument)) {
     vscode.window.showErrorMessage('Unable to run table test scenario because its location is unavailable.');
-    return;
+    return undefined;
+  }
+
+  if (!argument.label) {
+    vscode.window.showErrorMessage('Unable to run table test scenario because its subtest name is not statically known.');
+    return undefined;
   }
 
   const document = await vscode.workspace.openTextDocument(argument.uri);
@@ -87,13 +138,11 @@ async function delegateScenarioToGoExtension(
   editor.selection = new vscode.Selection(argument.scenarioRange.start, argument.scenarioRange.end);
   editor.revealRange(argument.scenarioRange, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
 
-  const commands = await vscode.commands.getCommands(true);
-  if (!commands.includes(goCommand)) {
-    vscode.window.showErrorMessage('Install or enable the Go extension to run and debug table test scenarios.');
-    return;
-  }
-
-  await vscode.commands.executeCommand(goCommand);
+  return {
+    argument,
+    runPattern: createGoTestRunPattern(argument.testName, argument.label),
+    workspaceFolder: vscode.workspace.getWorkspaceFolder(argument.uri),
+  };
 }
 
 function isScenarioCommandArgument(value: unknown): value is VsCodeTableTestScenarioCommandArgument {
