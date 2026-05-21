@@ -19,6 +19,9 @@
   "activationEvents": [
     "onLanguage:go"
   ],
+  "extensionDependencies": [
+    "golang.go"
+  ],
   "extensionPack": [],
   "scripts": {
     "vscode:prepublish": "npm run compile",
