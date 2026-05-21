@@ -1,6 +1,9 @@
 .git/**
 .vscode/**
 .vscode-test/**
-node_modules/**
+node_modules/tree-sitter-wasms/out/*
+!node_modules/tree-sitter-wasms/out/tree-sitter-go.wasm
+src/**
+tsconfig.json
 *.vsix
 .gitignore
