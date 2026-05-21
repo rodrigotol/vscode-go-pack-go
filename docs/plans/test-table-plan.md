@@ -58,7 +58,7 @@ The feature will add `run test` and `debug test` CodeLens entries above each det
    - Use detector results to place `run test` and `debug test` CodeLens entries above each scenario element.
    - Pass scenario range and document URI as command arguments.
 
-6. Run/debug delegation
+6. Run/debug delegation - Done
    - Add `go-pack-go.runTableTestScenario` and `go-pack-go.debugTableTestScenario`.
    - Each command reveals/selects the scenario range in the editor.
    - Delegate to the official Go extension's run/debug-at-cursor command.
