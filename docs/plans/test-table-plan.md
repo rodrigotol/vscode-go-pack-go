@@ -41,7 +41,7 @@ The feature will add `run test` and `debug test` CodeLens entries above each det
 - Do not use the native `tree-sitter` Node binding because it requires native build tooling on Windows and failed without the Windows SDK.
 - The WASM Tree-sitter runtime keeps the extension easier to install and package across platforms.
 
-3. Backward detection algorithm
+3. Backward detection algorithm - Done
    - Find `TestXxx` functions.
    - Inside each test function, find `for ... range ...` loops that call `t.Run(...)`.
    - Resolve ranged identifiers back to in-function slice/map composite literals.
@@ -49,7 +49,7 @@ The feature will add `run test` and `debug test` CodeLens entries above each det
    - Support positional, keyed, and multiline scenario entries.
    - Ignore literals not connected to a `t.Run` loop.
 
-4. Detector unit tests
+4. Detector unit tests - Done
    - Add fixture-based tests before wiring the detector into VS Code.
    - Cover supported table formats, ignored formats, incomplete syntax, and unrelated literals.
 
