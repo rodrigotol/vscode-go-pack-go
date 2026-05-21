@@ -2,7 +2,7 @@
 
 ## Summary
 
-Build the first feature into the current `go-pack-go` VS Code package: a Go table-test CodeLens provider that uses Tree-sitter, not regex, to detect table-test scenarios and delegates execution/debugging to the official Go extension commands.
+Build the first feature into the current `go-pack-go` VS Code package: a Go table-test CodeLens provider that uses Tree-sitter, not regex, to detect table-test scenarios and run/debug the selected scenario directly without asking the user to type the subtest name.
 
 The feature will add `run test` and `debug test` CodeLens entries above each detected table scenario in Go test files.
 
@@ -15,8 +15,8 @@ The feature will add `run test` and `debug test` CodeLens entries above each det
 - Add commands:
   - `go-pack-go.runTableTestScenario`
   - `go-pack-go.debugTableTestScenario`
-- Each command will reveal/select the scenario range, then invoke the Go extension's existing test/debug-at-cursor command.
-- Declare `golang.go` as an extension dependency or recommended dependency so delegation has a clear expectation.
+- Each command will reveal/select the scenario range, then run/debug the exact detected test/subtest pattern.
+- Declare `golang.go` as an extension dependency so debug execution has the Go debug adapter available.
 
 ## Implementation Steps
 
@@ -58,11 +58,12 @@ The feature will add `run test` and `debug test` CodeLens entries above each det
    - Use detector results to place `run test` and `debug test` CodeLens entries above each scenario element.
    - Pass scenario range and document URI as command arguments.
 
-6. Run/debug delegation - Done
+6. Run/debug execution - Done
    - Add `go-pack-go.runTableTestScenario` and `go-pack-go.debugTableTestScenario`.
    - Each command reveals/selects the scenario range in the editor.
-   - Delegate to the official Go extension's run/debug-at-cursor command.
-   - Show a concise error if the Go extension command is unavailable.
+   - Run the exact detected subtest without prompting for the subtest name.
+   - Debug the exact detected subtest through the Go debug adapter.
+   - Show a concise error if the subtest name is unavailable.
 
 7. VS Code integration tests and manual verification
    - Add extension tests for CodeLens count, placement, command arguments, and no-scenario behavior.
@@ -93,10 +94,10 @@ The feature will add `run test` and `debug test` CodeLens entries above each det
 
 ## Run And Debug Behavior
 
-- For `run test`, move the active selection/cursor to the detected scenario, then call the Go extension's run-test-at-cursor command.
-- For `debug test`, move the active selection/cursor to the detected scenario, then call the Go extension's debug-test-at-cursor command.
-- If the Go extension command is unavailable, show a concise error telling the user to install or enable the Go extension.
-- Do not shell out to `go test` in v1.
+- For `run test`, move the active selection/cursor to the detected scenario, then execute `go test -run` with an exact test/subtest pattern for the detected label.
+- For `debug test`, move the active selection/cursor to the detected scenario, then start a Go debug session in test mode with the same exact test/subtest pattern.
+- If the scenario label is unavailable, show a concise error instead of prompting for input.
+- Debug execution depends on the official Go extension and Delve (`dlv`/`dlv-dap`); on first use, the Go extension may prompt the user to install or update Delve.
 - Do not implement VS Code Testing API integration in v1.
 
 ## Test Plan
@@ -118,14 +119,15 @@ The feature will add `run test` and `debug test` CodeLens entries above each det
   - graceful behavior when no scenarios exist
 - Manually verify in Extension Development Host:
   - CodeLens appears above each scenario
-  - `run test` delegates to the Go extension
-  - `debug test` delegates to the Go extension
+  - `run test` runs the selected scenario without prompting for the subtest name
+  - `debug test` starts a debug session for the selected scenario without prompting for the subtest name
   - unsaved edits update CodeLens correctly
 
 ## Assumptions
 
 - "AST" means structured syntax parsing with Tree-sitter, not regex and not necessarily Go standard library `go/ast`.
 - The current package should remain the home for this first extension feature, rather than creating a separate repo.
-- The official Go extension is the v1 execution/debug backend.
+- The official Go extension provides the Go debug adapter for debug execution.
+- Delve must be installed or installable through the Go extension for debug CodeLens execution to work.
 - Regex may only be used as an optional cheap prefilter, never as the source of truth for scenario detection.
 - Public VS Code APIs used: CodeLens provider, commands, and extension testing APIs.
