@@ -53,7 +53,7 @@ The feature will add `run test` and `debug test` CodeLens entries above each det
    - Add fixture-based tests before wiring the detector into VS Code.
    - Cover supported table formats, ignored formats, incomplete syntax, and unrelated literals.
 
-5. CodeLens integration
+5. CodeLens integration - Done
    - Register a CodeLens provider for Go `_test.go` files.
    - Use detector results to place `run test` and `debug test` CodeLens entries above each scenario element.
    - Pass scenario range and document URI as command arguments.
