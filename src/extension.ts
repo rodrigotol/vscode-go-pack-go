@@ -10,6 +10,12 @@ import {
   TableTestScenarioCommandArgument,
 } from './testTableCodeLens';
 import { detectTestTableScenarios } from './testTableDetector';
+import {
+  createTypeImplementationCodeLensDescriptors,
+  GoToTypeImplementationCommandArgument,
+  goToTypeImplementationCommand,
+} from './typeImplementationCodeLens';
+import { detectTypeImplementations } from './typeImplementationDetector';
 
 interface VsCodeTableTestScenarioCommandArgument {
   readonly uri: vscode.Uri;
@@ -17,6 +23,13 @@ interface VsCodeTableTestScenarioCommandArgument {
   readonly testName: string;
   readonly tableName: string;
   readonly label?: string;
+}
+
+interface VsCodeGoToTypeImplementationCommandArgument {
+  readonly uri: vscode.Uri;
+  readonly position: vscode.Position;
+  readonly typeName: string;
+  readonly kind: 'struct' | 'interface';
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -30,9 +43,17 @@ export function activate(context: vscode.ExtensionContext): void {
     vscode.commands.registerCommand(debugTableTestScenarioCommand, (argument: VsCodeTableTestScenarioCommandArgument) =>
       debugTableTestScenario(argument),
     ),
+    vscode.commands.registerCommand(
+      goToTypeImplementationCommand,
+      (argument: VsCodeGoToTypeImplementationCommandArgument) => goToTypeImplementation(argument),
+    ),
     vscode.languages.registerCodeLensProvider(
       { language: 'go', scheme: '*' },
       new TableTestCodeLensProvider(),
+    ),
+    vscode.languages.registerCodeLensProvider(
+      { language: 'go', scheme: '*' },
+      new TypeImplementationCodeLensProvider(),
     ),
   );
 }
@@ -65,8 +86,40 @@ class TableTestCodeLensProvider implements vscode.CodeLensProvider {
   }
 }
 
+class TypeImplementationCodeLensProvider implements vscode.CodeLensProvider {
+  async provideCodeLenses(
+    document: vscode.TextDocument,
+    token: vscode.CancellationToken,
+  ): Promise<vscode.CodeLens[]> {
+    if (!isGoDocument(document)) {
+      return [];
+    }
+
+    const result = await detectTypeImplementations(document.getText());
+    if (token.isCancellationRequested || !result.parseSucceeded || result.hasSyntaxError) {
+      return [];
+    }
+
+    return createTypeImplementationCodeLensDescriptors(document.uri.toString(), result.declarations).map(
+      (descriptor) => {
+        const argument = toVsCodeTypeImplementationCommandArgument(descriptor.arguments[0]);
+
+        return new vscode.CodeLens(toVsCodeRange(descriptor.range), {
+          title: descriptor.title,
+          command: descriptor.command,
+          arguments: [argument],
+        });
+      },
+    );
+  }
+}
+
+function isGoDocument(document: vscode.TextDocument): boolean {
+  return document.languageId === 'go';
+}
+
 function isGoTestDocument(document: vscode.TextDocument): boolean {
-  return document.languageId === 'go' && document.fileName.endsWith('_test.go');
+  return isGoDocument(document) && document.fileName.endsWith('_test.go');
 }
 
 async function runTableTestScenario(argument: VsCodeTableTestScenarioCommandArgument): Promise<void> {
@@ -146,10 +199,35 @@ async function prepareScenarioCommand(argument: VsCodeTableTestScenarioCommandAr
   };
 }
 
+async function goToTypeImplementation(argument: VsCodeGoToTypeImplementationCommandArgument): Promise<void> {
+  if (!isGoToTypeImplementationCommandArgument(argument)) {
+    vscode.window.showErrorMessage('Unable to go to type implementation because its location is unavailable.');
+    return;
+  }
+
+  const document = await vscode.workspace.openTextDocument(argument.uri);
+  const editor = await vscode.window.showTextDocument(document, {
+    preserveFocus: false,
+    preview: false,
+  });
+
+  const selection = new vscode.Selection(argument.position, argument.position);
+  editor.selection = selection;
+  editor.revealRange(selection, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
+
+  await vscode.commands.executeCommand('editor.action.goToImplementation');
+}
+
 function isScenarioCommandArgument(value: unknown): value is VsCodeTableTestScenarioCommandArgument {
   const argument = value as Partial<VsCodeTableTestScenarioCommandArgument>;
 
   return argument.uri instanceof vscode.Uri && argument.scenarioRange instanceof vscode.Range;
+}
+
+function isGoToTypeImplementationCommandArgument(value: unknown): value is VsCodeGoToTypeImplementationCommandArgument {
+  const argument = value as Partial<VsCodeGoToTypeImplementationCommandArgument>;
+
+  return argument.uri instanceof vscode.Uri && argument.position instanceof vscode.Position;
 }
 
 function toVsCodeCommandArgument(argument: TableTestScenarioCommandArgument): VsCodeTableTestScenarioCommandArgument {
@@ -162,6 +240,17 @@ function toVsCodeCommandArgument(argument: TableTestScenarioCommandArgument): Vs
   };
 }
 
+function toVsCodeTypeImplementationCommandArgument(
+  argument: GoToTypeImplementationCommandArgument,
+): VsCodeGoToTypeImplementationCommandArgument {
+  return {
+    uri: vscode.Uri.parse(argument.uri),
+    position: toVsCodePosition(argument.position),
+    typeName: argument.typeName,
+    kind: argument.kind,
+  };
+}
+
 function toVsCodeRange(range: SourceRange): vscode.Range {
   return new vscode.Range(
     range.start.line,
@@ -169,4 +258,8 @@ function toVsCodeRange(range: SourceRange): vscode.Range {
     range.end.line,
     range.end.character,
   );
+}
+
+function toVsCodePosition(position: SourceRange['start']): vscode.Position {
+  return new vscode.Position(position.line, position.character);
 }
