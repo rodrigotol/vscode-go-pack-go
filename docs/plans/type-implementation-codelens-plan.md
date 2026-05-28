@@ -205,7 +205,7 @@ Status: completed
 
 ### Task 12. Broaden the detector domain model for method targets
 
-Status: pending
+Status: completed
 
 - Update `src/typeImplementationDetector.ts` so the returned domain model can represent additional implementation targets beyond type declarations.
 - Extend the declaration kind union to include `method` and `interface-method`.
@@ -215,7 +215,7 @@ Status: pending
 
 ### Task 13. Implement AST detection for method implementations and interface methods
 
-Status: pending
+Status: completed
 
 - Extend the existing Tree-sitter traversal in `src/typeImplementationDetector.ts`.
 - Detect `method_declaration` nodes and capture the method `field_identifier` position for command execution.
@@ -227,7 +227,7 @@ Status: pending
 
 ### Task 14. Expand detector unit tests for the new method cases
 
-Status: pending
+Status: completed
 
 - Update `src/typeImplementationDetector.test.ts`.
 - Add coverage for:

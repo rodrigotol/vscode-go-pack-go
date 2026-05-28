@@ -6,10 +6,15 @@ type SyntaxNode = Parser.SyntaxNode;
 type Tree = Parser.Tree;
 
 export type TypeImplementationDeclarationKind = 'struct' | 'interface';
+export type TypeImplementationTargetKind =
+  | TypeImplementationDeclarationKind
+  | 'method'
+  | 'interface-method';
 
 export interface TypeImplementationDeclaration {
-  readonly kind: TypeImplementationDeclarationKind;
+  readonly kind: TypeImplementationTargetKind;
   readonly typeName: string;
+  readonly methodName?: string;
   readonly declarationRange: SourceRange;
   readonly identifierPosition: SourcePosition;
 }
@@ -47,26 +52,99 @@ export async function detectTypeImplementations(source: string): Promise<DetectT
 
 function findTypeDeclarations(rootNode: SyntaxNode): TypeImplementationDeclaration[] {
   const declarations: TypeImplementationDeclaration[] = [];
+  collectDeclarations(rootNode, declarations);
+  return declarations;
+}
 
-  for (const typeSpec of rootNode.descendantsOfType('type_spec')) {
-    const typeIdentifier = findFirstNamedChild(typeSpec, 'type_identifier');
-    const kind = getDeclarationKind(typeSpec);
-    if (!typeIdentifier || !kind) {
-      continue;
+function collectDeclarations(
+  node: SyntaxNode,
+  declarations: TypeImplementationDeclaration[],
+  enclosingInterface?: {
+    readonly typeName: string;
+  },
+): void {
+  if (node.type === 'type_spec') {
+    const typeDeclaration = createTypeDeclaration(node);
+    if (typeDeclaration) {
+      declarations.push(typeDeclaration);
     }
 
-    declarations.push({
-      kind,
-      typeName: typeIdentifier.text,
-      declarationRange: rangeFromPoints(typeSpec.startPosition, typeSpec.endPosition),
-      identifierPosition: {
-        line: typeIdentifier.startPosition.row,
-        character: typeIdentifier.startPosition.column,
-      },
-    });
+    const interfaceTypeName = typeDeclaration?.kind === 'interface' ? typeDeclaration.typeName : undefined;
+    for (const child of node.namedChildren) {
+      collectDeclarations(
+        child,
+        declarations,
+        interfaceTypeName ? { typeName: interfaceTypeName } : undefined,
+      );
+    }
+    return;
   }
 
-  return declarations;
+  if (node.type === 'method_declaration') {
+    const methodDeclaration = createMethodDeclaration(node);
+    if (methodDeclaration) {
+      declarations.push(methodDeclaration);
+    }
+  } else if (node.type === 'method_spec' && enclosingInterface) {
+    const interfaceMethodDeclaration = createInterfaceMethodDeclaration(node, enclosingInterface.typeName);
+    if (interfaceMethodDeclaration) {
+      declarations.push(interfaceMethodDeclaration);
+    }
+  }
+
+  for (const child of node.namedChildren) {
+    collectDeclarations(child, declarations, enclosingInterface);
+  }
+}
+
+function createTypeDeclaration(typeSpec: SyntaxNode): TypeImplementationDeclaration | undefined {
+  const typeIdentifier = findFirstNamedChild(typeSpec, 'type_identifier');
+  const kind = getDeclarationKind(typeSpec);
+  if (!typeIdentifier || !kind) {
+    return undefined;
+  }
+
+  return {
+    kind,
+    typeName: typeIdentifier.text,
+    declarationRange: rangeFromPoints(typeSpec.startPosition, typeSpec.endPosition),
+    identifierPosition: toSourcePosition(typeIdentifier),
+  };
+}
+
+function createMethodDeclaration(methodDeclaration: SyntaxNode): TypeImplementationDeclaration | undefined {
+  const methodIdentifier = findFirstNamedChild(methodDeclaration, 'field_identifier');
+  const receiver = findFirstNamedChild(methodDeclaration, 'parameter_list');
+  const receiverType = receiver?.descendantsOfType('type_identifier')[0];
+  if (!methodIdentifier || !receiverType) {
+    return undefined;
+  }
+
+  return {
+    kind: 'method',
+    typeName: receiverType.text,
+    methodName: methodIdentifier.text,
+    declarationRange: rangeFromPoints(methodDeclaration.startPosition, methodDeclaration.endPosition),
+    identifierPosition: toSourcePosition(methodIdentifier),
+  };
+}
+
+function createInterfaceMethodDeclaration(
+  methodSpec: SyntaxNode,
+  interfaceName: string,
+): TypeImplementationDeclaration | undefined {
+  const methodIdentifier = findFirstNamedChild(methodSpec, 'field_identifier');
+  if (!methodIdentifier) {
+    return undefined;
+  }
+
+  return {
+    kind: 'interface-method',
+    typeName: interfaceName,
+    methodName: methodIdentifier.text,
+    declarationRange: rangeFromPoints(methodSpec.startPosition, methodSpec.endPosition),
+    identifierPosition: toSourcePosition(methodIdentifier),
+  };
 }
 
 function getDeclarationKind(typeSpec: SyntaxNode): TypeImplementationDeclarationKind | undefined {
@@ -79,4 +157,11 @@ function getDeclarationKind(typeSpec: SyntaxNode): TypeImplementationDeclaration
   }
 
   return undefined;
+}
+
+function toSourcePosition(node: SyntaxNode): SourcePosition {
+  return {
+    line: node.startPosition.row,
+    character: node.startPosition.column,
+  };
 }
