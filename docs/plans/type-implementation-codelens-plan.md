@@ -242,7 +242,7 @@ Status: completed
 
 ### Task 15. Broaden the CodeLens descriptor module for the new target kinds
 
-Status: pending
+Status: completed
 
 - Update `src/typeImplementationCodeLens.ts` so descriptor creation works for `method` and `interface-method` targets in addition to the existing type declarations.
 - Keep the command id as `go-pack-go.goToTypeImplementation`.
@@ -252,7 +252,7 @@ Status: pending
 
 ### Task 16. Expand descriptor unit tests for method and interface-method lenses
 
-Status: pending
+Status: completed
 
 - Update `src/typeImplementationCodeLens.test.ts`.
 - Verify:
@@ -265,7 +265,7 @@ Status: pending
 
 ### Task 17. Update the implementation command wiring for all supported targets
 
-Status: pending
+Status: completed
 
 - Update `src/extension.ts`.
 - Broaden the command argument model and validation for `go-pack-go.goToTypeImplementation` so it accepts the new method-related target kinds.
@@ -279,7 +279,7 @@ Status: pending
 
 ### Task 18. Update the Go-wide implementation CodeLens provider
 
-Status: pending
+Status: completed
 
 - Update the existing implementation `CodeLensProvider` in `src/extension.ts`.
 - Keep the current provider split between:
@@ -291,7 +291,7 @@ Status: pending
 
 ### Task 19. Perform regression review for the extended implementation feature
 
-Status: pending
+Status: completed
 
 - Review `src/extension.ts`, `src/typeImplementationDetector.ts`, and `src/typeImplementationCodeLens.ts` for unintended regressions in the original struct/interface behavior.
 - Confirm:
@@ -303,14 +303,14 @@ Status: pending
 
 ### Task 20. Run the automated test suite after the method-related changes
 
-Status: pending
+Status: completed
 
 - Run the existing test command and fix any compile or test failures introduced by Tasks 12-19.
 - Done when all old and new tests pass together.
 
 ### Task 21. Perform manual verification for method and interface-method lenses
 
-Status: pending
+Status: completed
 
 - In the Extension Development Host, verify:
   - struct and interface lenses still appear in `.go` files

@@ -101,17 +101,21 @@ class TypeImplementationCodeLensProvider implements vscode.CodeLensProvider {
       return [];
     }
 
-    return createTypeImplementationCodeLensDescriptors(document.uri.toString(), result.declarations).map(
-      (descriptor) => {
-        const argument = toVsCodeTypeImplementationCommandArgument(descriptor.arguments[0]);
-
-        return new vscode.CodeLens(toVsCodeRange(descriptor.range), {
-          title: descriptor.title,
-          command: descriptor.command,
-          arguments: [argument],
-        });
-      },
+    const implementationTargets = result.declarations;
+    const descriptors = createTypeImplementationCodeLensDescriptors(
+      document.uri.toString(),
+      implementationTargets,
     );
+
+    return descriptors.map((descriptor) => {
+      const argument = toVsCodeTypeImplementationCommandArgument(descriptor.arguments[0]);
+
+      return new vscode.CodeLens(toVsCodeRange(descriptor.range), {
+        title: descriptor.title,
+        command: descriptor.command,
+        arguments: [argument],
+      });
+    });
   }
 }
 
@@ -228,7 +232,28 @@ function isScenarioCommandArgument(value: unknown): value is VsCodeTableTestScen
 function isGoToTypeImplementationCommandArgument(value: unknown): value is VsCodeGoToTypeImplementationCommandArgument {
   const argument = value as Partial<VsCodeGoToTypeImplementationCommandArgument>;
 
-  return argument.uri instanceof vscode.Uri && argument.position instanceof vscode.Position;
+  return (
+    argument.uri instanceof vscode.Uri &&
+    argument.position instanceof vscode.Position &&
+    typeof argument.typeName === 'string' &&
+    isTypeImplementationTargetKind(argument.kind) &&
+    hasValidMethodName(argument.kind, argument.methodName)
+  );
+}
+
+function isTypeImplementationTargetKind(value: unknown): value is TypeImplementationTargetKind {
+  return value === 'struct' || value === 'interface' || value === 'method' || value === 'interface-method';
+}
+
+function hasValidMethodName(
+  kind: TypeImplementationTargetKind,
+  methodName: unknown,
+): methodName is string | undefined {
+  if (kind === 'method' || kind === 'interface-method') {
+    return typeof methodName === 'string';
+  }
+
+  return methodName === undefined;
 }
 
 function toVsCodeCommandArgument(argument: TableTestScenarioCommandArgument): VsCodeTableTestScenarioCommandArgument {
