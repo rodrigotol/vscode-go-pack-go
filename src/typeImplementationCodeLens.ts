@@ -1,5 +1,5 @@
 import { SourcePosition, SourceRange } from './goTreeSitter';
-import { TypeImplementationDeclaration } from './typeImplementationDetector';
+import { TypeImplementationDeclaration, TypeImplementationTargetKind } from './typeImplementationDetector';
 
 export const goToTypeImplementationCommand = 'go-pack-go.goToTypeImplementation';
 
@@ -7,7 +7,8 @@ export interface GoToTypeImplementationCommandArgument {
   readonly uri: string;
   readonly position: SourcePosition;
   readonly typeName: string;
-  readonly kind: 'struct' | 'interface';
+  readonly kind: TypeImplementationTargetKind;
+  readonly methodName?: string;
 }
 
 export interface TypeImplementationCodeLensDescriptor {
@@ -31,6 +32,7 @@ export function createTypeImplementationCodeLensDescriptors(
         position: declaration.identifierPosition,
         typeName: declaration.typeName,
         kind: declaration.kind,
+        ...(declaration.methodName ? { methodName: declaration.methodName } : {}),
       },
     ],
   }));

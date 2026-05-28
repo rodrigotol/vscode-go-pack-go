@@ -7,7 +7,7 @@ import {
 } from './typeImplementationCodeLens';
 import { detectTypeImplementations } from './typeImplementationDetector';
 
-test('creates one CodeLens descriptor per detected type declaration', async () => {
+test('creates one CodeLens descriptor per detected implementation target', async () => {
   const result = await detectTypeImplementations(`package p
 
 type Reader interface {
@@ -17,6 +17,8 @@ type Reader interface {
 type Person struct {
 	Name string
 }
+
+func (p Person) Read() {}
 `);
 
   const descriptors = createTypeImplementationCodeLensDescriptors(
@@ -24,14 +26,24 @@ type Person struct {
     result.declarations,
   );
 
-  assert.equal(descriptors.length, 2);
+  assert.equal(descriptors.length, 4);
   assert.deepEqual(
     descriptors.map((descriptor) => descriptor.title),
-    ['go to implementation', 'go to implementation'],
+    [
+      'go to implementation',
+      'go to implementation',
+      'go to implementation',
+      'go to implementation',
+    ],
   );
   assert.deepEqual(
     descriptors.map((descriptor) => descriptor.command),
-    [goToTypeImplementationCommand, goToTypeImplementationCommand],
+    [
+      goToTypeImplementationCommand,
+      goToTypeImplementationCommand,
+      goToTypeImplementationCommand,
+      goToTypeImplementationCommand,
+    ],
   );
   assert.deepEqual(
     descriptors.map((descriptor) => descriptor.arguments[0]),
@@ -44,9 +56,23 @@ type Person struct {
       },
       {
         uri: 'file:///workspace/example.go',
+        position: { line: 3, character: 1 },
+        typeName: 'Reader',
+        methodName: 'Read',
+        kind: 'interface-method',
+      },
+      {
+        uri: 'file:///workspace/example.go',
         position: { line: 6, character: 5 },
         typeName: 'Person',
         kind: 'struct',
+      },
+      {
+        uri: 'file:///workspace/example.go',
+        position: { line: 10, character: 16 },
+        typeName: 'Person',
+        methodName: 'Read',
+        kind: 'method',
       },
     ],
   );

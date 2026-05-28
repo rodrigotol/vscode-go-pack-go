@@ -15,7 +15,7 @@ import {
   GoToTypeImplementationCommandArgument,
   goToTypeImplementationCommand,
 } from './typeImplementationCodeLens';
-import { detectTypeImplementations } from './typeImplementationDetector';
+import { detectTypeImplementations, TypeImplementationTargetKind } from './typeImplementationDetector';
 
 interface VsCodeTableTestScenarioCommandArgument {
   readonly uri: vscode.Uri;
@@ -29,7 +29,8 @@ interface VsCodeGoToTypeImplementationCommandArgument {
   readonly uri: vscode.Uri;
   readonly position: vscode.Position;
   readonly typeName: string;
-  readonly kind: 'struct' | 'interface';
+  readonly kind: TypeImplementationTargetKind;
+  readonly methodName?: string;
 }
 
 export function activate(context: vscode.ExtensionContext): void {
@@ -248,6 +249,7 @@ function toVsCodeTypeImplementationCommandArgument(
     position: toVsCodePosition(argument.position),
     typeName: argument.typeName,
     kind: argument.kind,
+    methodName: argument.methodName,
   };
 }
 
