@@ -73,12 +73,16 @@ Detection will be AST-based using the existing Tree-sitter stack already in the 
 
 ### Task 1. Create shared Tree-sitter utilities
 
+Status: completed
+
 - Extract parser/bootstrap helpers from `src/testTableDetector.ts` into a new shared module.
 - Move shared types/helpers only: parser init, Go language loading, `rangeFromPoints`, and any generic AST helpers that are clearly reusable.
 - Keep test-table behavior unchanged.
 - Done when `testTableDetector.ts` builds against the shared module with no behavior change.
 
 ### Task 2. Add type-detection domain model
+
+Status: completed
 
 - Create a new pure module for type detection, for example `src/typeImplementationDetector.ts`.
 - Define serializable types for:
@@ -92,6 +96,8 @@ Detection will be AST-based using the existing Tree-sitter stack already in the 
 
 ### Task 3. Implement AST detection for struct and interface declarations
 
+Status: completed
+
 - Parse Go source using the shared Tree-sitter utilities.
 - Detect only `type_spec` nodes whose underlying type is `struct_type` or `interface_type`.
 - Support generic declarations like `type Name[T any] struct {}` and `type Name[T any] interface {}`.
@@ -100,6 +106,8 @@ Detection will be AST-based using the existing Tree-sitter stack already in the 
 - Done when the detector returns the expected declarations from source text alone.
 
 ### Task 4. Add detector unit tests
+
+Status: completed
 
 - Create `src/typeImplementationDetector.test.ts`.
 - Cover:

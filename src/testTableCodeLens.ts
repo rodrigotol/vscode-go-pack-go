@@ -1,4 +1,5 @@
-import { SourceRange, TestTableScenario } from './testTableDetector';
+import { SourceRange } from './goTreeSitter';
+import { TestTableScenario } from './testTableDetector';
 
 export const runTableTestScenarioCommand = 'go-pack-go.runTableTestScenario';
 export const debugTableTestScenarioCommand = 'go-pack-go.debugTableTestScenario';
