@@ -122,6 +122,8 @@ Status: completed
 
 ### Task 5. Add CodeLens descriptor module
 
+Status: completed
+
 - Create a new helper module, for example `src/typeImplementationCodeLens.ts`.
 - Define:
   - command id constant: `go-pack-go.goToTypeImplementation`
@@ -133,6 +135,8 @@ Status: completed
 
 ### Task 6. Add descriptor unit tests
 
+Status: completed
+
 - Create `src/typeImplementationCodeLens.test.ts`.
 - Verify:
   - one descriptor per detected declaration
@@ -143,6 +147,8 @@ Status: completed
 - Done when descriptor output is locked by tests.
 
 ### Task 7. Wire the new command into the extension
+
+Status: completed
 
 - Update `src/extension.ts`.
 - Register `go-pack-go.goToTypeImplementation`.
@@ -157,6 +163,8 @@ Status: completed
 - Done when the command is registered and compiles.
 
 ### Task 8. Add a dedicated CodeLens provider for type declarations
+
+Status: completed
 
 - In `src/extension.ts`, register a second `CodeLensProvider`.
 - Scope it to Go files generally, separate from the `_test.go`-only table-test provider.
