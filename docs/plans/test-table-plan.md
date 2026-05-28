@@ -65,9 +65,10 @@ The feature will add `run test` and `debug test` CodeLens entries above each det
    - Debug the exact detected subtest through the Go debug adapter.
    - Show a concise error if the subtest name is unavailable.
 
-7. VS Code integration tests and manual verification
+7. VS Code integration tests and manual verification - Done
    - Add extension tests for CodeLens count, placement, command arguments, and no-scenario behavior.
    - Manually verify CodeLens updates on unsaved edits and run/debug delegation works in the Extension Development Host.
+   - Manual Extension Development Host validation passed for v1 table-test scenarios.
 
 ## Detection Behavior
 
