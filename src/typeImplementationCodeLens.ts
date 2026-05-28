@@ -2,6 +2,7 @@ import { SourcePosition, SourceRange } from './goTreeSitter';
 import { TypeImplementationDeclaration, TypeImplementationTargetKind } from './typeImplementationDetector';
 
 export const goToTypeImplementationCommand = 'go-pack-go.goToTypeImplementation';
+export const goToTypeImplementationTitle = 'go to implementation';
 
 export interface GoToTypeImplementationCommandArgument {
   readonly uri: string;
@@ -20,22 +21,29 @@ export interface TypeImplementationCodeLensDescriptor {
 
 export function createTypeImplementationCodeLensDescriptors(
   uri: string,
-  declarations: readonly TypeImplementationDeclaration[],
+  targets: readonly TypeImplementationDeclaration[],
 ): TypeImplementationCodeLensDescriptor[] {
-  return declarations.map((declaration) => ({
-    range: createCodeLensRange(declaration.declarationRange),
-    title: 'go to implementation',
+  return targets.map((target) => createTypeImplementationCodeLensDescriptor(uri, target));
+}
+
+function createTypeImplementationCodeLensDescriptor(
+  uri: string,
+  target: TypeImplementationDeclaration,
+): TypeImplementationCodeLensDescriptor {
+  return {
+    range: createCodeLensRange(target.declarationRange),
+    title: goToTypeImplementationTitle,
     command: goToTypeImplementationCommand,
     arguments: [
       {
         uri,
-        position: declaration.identifierPosition,
-        typeName: declaration.typeName,
-        kind: declaration.kind,
-        ...(declaration.methodName ? { methodName: declaration.methodName } : {}),
+        position: target.identifierPosition,
+        typeName: target.typeName,
+        kind: target.kind,
+        ...(target.methodName ? { methodName: target.methodName } : {}),
       },
     ],
-  }));
+  };
 }
 
 function createCodeLensRange(range: SourceRange): SourceRange {
