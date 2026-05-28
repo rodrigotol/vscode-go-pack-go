@@ -4,6 +4,7 @@ All notable changes to this extension pack will be documented in this file.
 
 ## 0.0.1
 
+- Added plan go main runner [#14](https://github.com/rodrigotol/vscode-go-pack-go/pull/14)
 - Added plan for custom goToReferences extension [#13](https://github.com/rodrigotol/vscode-go-pack-go/pull/13)
 - Updated changelog [#12](https://github.com/rodrigotol/vscode-go-pack-go/pull/12)
 - Finalized extend support of "go to implementation" to methods [#11](https://github.com/rodrigotol/vscode-go-pack-go/pull/11)
