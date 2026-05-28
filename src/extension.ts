@@ -1,6 +1,7 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 
+import { SourceRange } from './goTreeSitter';
 import { createGoTestRunPattern } from './goTestRun';
 import {
   createTableTestCodeLensDescriptors,
@@ -8,7 +9,7 @@ import {
   runTableTestScenarioCommand,
   TableTestScenarioCommandArgument,
 } from './testTableCodeLens';
-import { detectTestTableScenarios, SourceRange } from './testTableDetector';
+import { detectTestTableScenarios } from './testTableDetector';
 
 interface VsCodeTableTestScenarioCommandArgument {
   readonly uri: vscode.Uri;

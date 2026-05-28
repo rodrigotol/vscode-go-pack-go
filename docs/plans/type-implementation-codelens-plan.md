@@ -73,6 +73,8 @@ Detection will be AST-based using the existing Tree-sitter stack already in the 
 
 ### Task 1. Create shared Tree-sitter utilities
 
+Status: completed
+
 - Extract parser/bootstrap helpers from `src/testTableDetector.ts` into a new shared module.
 - Move shared types/helpers only: parser init, Go language loading, `rangeFromPoints`, and any generic AST helpers that are clearly reusable.
 - Keep test-table behavior unchanged.
