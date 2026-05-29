@@ -1,10 +1,12 @@
 # Go Pack Go
 
-A VS Code extension pack for Go development.
+A VS Code extension for Go-focused CodeLens workflows.
 
-## Included Extensions
+## Features
 
-This pack is being initialized. Extension IDs will be added to `package.json` under `extensionPack`.
+- Run and debug CodeLens actions for detected table-test scenarios
+- Go to implementation CodeLens actions for structs, interfaces, and methods
+- Planned `func main()` run/debug CodeLens integration
 
 ## Development
 
@@ -13,4 +15,3 @@ Package the extension locally:
 ```sh
 npx @vscode/vsce package
 ```
-

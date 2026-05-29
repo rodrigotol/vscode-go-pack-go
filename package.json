@@ -1,7 +1,7 @@
 {
   "name": "go-pack-go",
   "displayName": "Go Pack Go",
-  "description": "A curated VS Code extension pack for Go development.",
+  "description": "VS Code Go productivity features for table tests, type implementations, and main entrypoints.",
   "version": "0.0.1",
   "publisher": "rodriag",
   "main": "./out/extension.js",
@@ -9,12 +9,14 @@
     "vscode": "^1.90.0"
   },
   "categories": [
-    "Extension Packs"
+    "Programming Languages"
   ],
   "keywords": [
     "go",
     "golang",
-    "extension-pack"
+    "codelens",
+    "debug",
+    "testing"
   ],
   "activationEvents": [
     "onLanguage:go"
@@ -22,7 +24,28 @@
   "extensionDependencies": [
     "golang.go"
   ],
-  "extensionPack": [],
+  "contributes": {
+    "commands": [
+      {
+        "command": "go-pack-go.runGoMain",
+        "title": "Go Pack Go: Run Go Main"
+      },
+      {
+        "command": "go-pack-go.debugGoMain",
+        "title": "Go Pack Go: Debug Go Main"
+      }
+    ],
+    "configuration": {
+      "title": "Go Pack Go",
+      "properties": {
+        "goPackGo.enableDebugLogs": {
+          "type": "boolean",
+          "default": false,
+          "description": "Enable verbose logging for the Go main runner feature."
+        }
+      }
+    }
+  },
   "scripts": {
     "vscode:prepublish": "npm run compile",
     "compile": "tsc -p ./",

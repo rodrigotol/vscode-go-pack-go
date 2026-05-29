@@ -33,7 +33,8 @@ The current repo is already an extension with active Go features. The new main-r
 - Reuse the current package and extension id: `go-pack-go`
 - Add new modules rather than rewriting existing table-test or type-implementation modules
 - Register an additional Go-wide `CodeLensProvider` beside the current ones
-- Keep the feature independent from the Tree-sitter-based detectors already in the repo; this feature should use VS Code's document symbol provider as originally intended
+- Reuse the existing Tree-sitter parser for package detection rather than introducing a second parsing stack
+- Keep main-function discovery on VS Code's document symbol provider as originally intended
 - Extend the manifest only where needed for the new commands and setting
 
 ## Implementation Notes
@@ -67,7 +68,7 @@ The current repo is already an extension with active Go features. The new main-r
 
 ### Main detection
 
-- Determine `package main` by scanning the first 20 lines, skipping comment-only lines, and checking the first package clause found.
+- Determine `package main` from the Go AST package clause.
 - Use `vscode.executeDocumentSymbolProvider` to find function symbols named exactly `main`.
 - Walk the symbol tree recursively.
 
@@ -151,14 +152,14 @@ The current repo is already an extension with active Go features. The new main-r
   - dirty files
   - files not in `package main`
 - Use `vscode.executeDocumentSymbolProvider` and recursive symbol walking to collect every function symbol named `main`.
-- Keep package detection limited to the first 20 lines with comment skipping.
+- Use AST package detection for `package main` eligibility.
 - Done when the detector returns one result per `func main()` in saved `package main` files and none otherwise.
 
 ### Task 3. Add detector-focused tests
 
 - Add tests for:
-  - `package main` in the first 20 lines
-  - comment skipping before the package clause
+  - `package main` via AST package-clause detection
+  - source text with leading comments still resolving to `package main`
   - non-main packages being rejected
   - multiple `main` symbols being preserved
 - Keep these tests as focused as possible on the detector logic rather than extension wiring.
