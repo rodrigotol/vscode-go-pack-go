@@ -4,6 +4,7 @@ All notable changes to this extension pack will be documented in this file.
 
 ## 0.0.1
 
+- Added go main runner codelens [#17](https://github.com/rodrigotol/vscode-go-pack-go/pull/17)
 - Added go main runner detector [#16](https://github.com/rodrigotol/vscode-go-pack-go/pull/16)
 - Adapted plan of go main runner to current project [#15](https://github.com/rodrigotol/vscode-go-pack-go/pull/15)
 - Added plan go main runner [#14](https://github.com/rodrigotol/vscode-go-pack-go/pull/14)

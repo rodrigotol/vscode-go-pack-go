@@ -132,7 +132,7 @@ The current repo is already an extension with active Go features. The new main-r
 
 ## Execution Breakdown
 
-### Task 1. Align manifest and product description
+### Task 1. Align manifest and product description - Done
 
 - Update `package.json` so the existing extension manifest can host the new main-runner feature.
 - Add:
@@ -143,7 +143,7 @@ The current repo is already an extension with active Go features. The new main-r
 - Update package metadata and docs only as needed so the project no longer reads like a dormant extension pack if that is still inaccurate.
 - Done when the manifest cleanly describes the current multi-feature extension and still compiles.
 
-### Task 2. Add a main-function detector module
+### Task 2. Add a main-function detector module - Done
 
 - Create a detector that accepts a `vscode.TextDocument`.
 - Return no results for:
@@ -155,7 +155,7 @@ The current repo is already an extension with active Go features. The new main-r
 - Use AST package detection for `package main` eligibility.
 - Done when the detector returns one result per `func main()` in saved `package main` files and none otherwise.
 
-### Task 3. Add detector-focused tests
+### Task 3. Add detector-focused tests - Done
 
 - Add tests for:
   - `package main` via AST package-clause detection
@@ -165,7 +165,7 @@ The current repo is already an extension with active Go features. The new main-r
 - Keep these tests as focused as possible on the detector logic rather than extension wiring.
 - Done when detector behavior is locked by automated tests.
 
-### Task 4. Add a dedicated CodeLens descriptor/provider path
+### Task 4. Add a dedicated CodeLens descriptor/provider path - Done
 
 - Create a new CodeLens helper module for the main-runner feature.
 - Emit exactly two lenses per detected main:
@@ -175,7 +175,7 @@ The current repo is already an extension with active Go features. The new main-r
 - Implement a provider with document-version caching plus an `onDidChangeCodeLenses` event.
 - Done when the provider can produce main-runner lenses without touching the existing two providers.
 
-### Task 5. Add provider tests
+### Task 5. Add provider tests - Done
 
 - Verify:
   - two lenses are produced per detected main
