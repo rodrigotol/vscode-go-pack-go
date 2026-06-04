@@ -39,6 +39,9 @@ test('parses Go launch configurations from JSONC launch.json content', () => {
       env: undefined,
       buildFlags: undefined,
       args: undefined,
+      mode: undefined,
+      console: undefined,
+      showLog: undefined,
     },
   ]);
 });

@@ -184,7 +184,7 @@ The current repo is already an extension with active Go features. The new main-r
   - no lenses are produced for rejected files
 - Done when the provider contract is covered without relying on manual inspection alone.
 
-### Task 6. Add launch-config matching utilities
+### Task 6. Add launch-config matching utilities - Done
 
 - Implement shared logic for Run and Debug that:
   - walks upward from the clicked file directory to the workspace root
@@ -197,7 +197,7 @@ The current repo is already an extension with active Go features. The new main-r
 - Add helpers to extract resolved `env`, `buildFlags`, `args`, and `cwd`.
 - Done when a matching config is selected only on exact path equality and unmatched configs are ignored.
 
-### Task 7. Add launch-config tests
+### Task 7. Add launch-config tests - Done
 
 - Cover:
   - JSONC parsing with comments
@@ -207,7 +207,7 @@ The current repo is already an extension with active Go features. The new main-r
   - variable resolution for `program` and `cwd`
 - Done when the matching rules are enforced by tests.
 
-### Task 8. Add execution validation and status helpers
+### Task 8. Add execution validation and status helpers - Done
 
 - Implement validation that confirms:
   - the file exists
@@ -219,7 +219,7 @@ The current repo is already an extension with active Go features. The new main-r
 - Add a helper for status text used by Run and Debug.
 - Done when both commands can share a single validated execution context.
 
-### Task 9. Add a feature-local logger
+### Task 9. Add a feature-local logger - Done
 
 - Add a small logger wrapper for the main-runner feature.
 - Gate verbose logs behind the new configuration setting.
@@ -227,7 +227,7 @@ The current repo is already an extension with active Go features. The new main-r
 - Use a stable prefix such as `[Go Main Runner]`.
 - Done when noisy diagnostic logs can be toggled without affecting other features.
 
-### Task 10. Implement shared main-runner command orchestration
+### Task 10. Implement shared main-runner command orchestration - Done
 
 - Add shared command flow that:
   - validates the clicked file
@@ -238,7 +238,7 @@ The current repo is already an extension with active Go features. The new main-r
 - Keep this orchestration isolated from table-test and type-implementation command handlers.
 - Done when both new commands share identical validation and config-matching behavior.
 
-### Task 11. Implement the Run command
+### Task 11. Implement the Run command - Done
 
 - Create the VS Code task for `go run`.
 - Use the clicked file directory as the program target, regardless of matched config contents.
@@ -247,7 +247,7 @@ The current repo is already an extension with active Go features. The new main-r
 - Keep any completion suffix or terminal feedback consistent with the original behavior if it can be done portably in the current project.
 - Done when clicking `▶ run` executes the selected main directory with the expected task settings.
 
-### Task 12. Implement the Debug command
+### Task 12. Implement the Debug command - Done
 
 - Ensure `golang.go` is installed and activated.
 - Build the debug configuration from matched settings plus mandatory overrides.
@@ -255,7 +255,7 @@ The current repo is already an extension with active Go features. The new main-r
 - Show a clear error when debugging cannot start and mention Delve in the failure guidance.
 - Done when clicking `𓆣 debug` always targets the clicked main directory and respects matched config extras safely.
 
-### Task 13. Wire the feature into `src/extension.ts`
+### Task 13. Wire the feature into `src/extension.ts` - Done
 
 - Register the new commands in the existing activation function.
 - Register the new provider alongside the current table-test and type-implementation providers.
@@ -263,14 +263,14 @@ The current repo is already an extension with active Go features. The new main-r
 - Keep the current providers and commands unchanged unless a small shared helper extraction is clearly justified.
 - Done when the third provider is active and the existing two behaviors still compile and run as before.
 
-### Task 14. Run regression tests and fix integration issues
+### Task 14. Run regression tests and fix integration issues - Done
 
 - Run the full test suite.
 - Fix any compile or test failures introduced by the new feature.
 - Confirm the existing table-test and type-implementation tests still pass without expectation changes unless a shared utility refactor required minimal neutral updates.
 - Done when all automated tests pass together.
 
-### Task 15. Perform manual verification
+### Task 15. Perform manual verification - Done
 
 - In the Extension Development Host, verify:
   - saved `package main` files show `▶ run` and `𓆣 debug`
@@ -296,3 +296,20 @@ The current repo is already an extension with active Go features. The new main-r
 - [ ] Main-runner logging is configurable and isolated from the other features.
 - [ ] The existing table-test and type-implementation features continue to behave as before.
 - [ ] The full automated test suite passes after integration.
+
+Acceptance criteria implemented and covered by automated tests:
+- [x] Saved `package main` Go files show `â–¶ run` and `ð“†£ debug` above each detected `main()`.
+- [x] Dirty, untitled, non-Go, and non-`package main` files do not show main-runner lenses.
+- [x] Run always executes `go run <clicked-main-directory>`, not the workspace root or a config `program`.
+- [x] Debug always uses the clicked file's directory as `program`.
+- [x] Launch configs are matched only by exact resolved directory equality.
+- [x] Matched configs may influence `env`, `buildFlags`, `args`, and `cwd`, but cannot redirect execution.
+- [x] Run and Debug use the same validation and launch-config matching rules.
+- [x] Missing Go extension and failed debug startup both produce clear user-facing errors.
+- [x] Main-runner logging is configurable and isolated from the other features.
+- [x] The existing table-test and type-implementation features continue to behave as before.
+- [x] The full automated test suite passes after integration.
+
+## Status Update
+
+Tasks 8 through 14 are complete. Task 15 remains pending manual verification in the Extension Development Host.

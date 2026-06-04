@@ -1,8 +1,19 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 
+import { createGoMainLogger } from './goMainLogger';
+import {
+  debugGoMainCommand as debugGoMainRunnerCommand,
+  runGoMainCommand as runGoMainRunnerCommand,
+} from './goMainRunner';
 import { SourceRange } from './goTreeSitter';
 import { createGoTestRunPattern } from './goTestRun';
+import {
+  debugGoMainCommand,
+  GoMainCodeLensCommandArgument,
+  GoMainCodeLensProvider,
+  runGoMainCommand,
+} from './goMainCodeLens';
 import {
   createTableTestCodeLensDescriptors,
   debugTableTestScenarioCommand,
@@ -34,10 +45,32 @@ interface VsCodeGoToTypeImplementationCommandArgument {
 }
 
 export function activate(context: vscode.ExtensionContext): void {
+  const goMainLogger = createGoMainLogger();
+  const goMainCodeLensProvider = new GoMainVsCodeCodeLensProvider();
+  const goMainRefreshDisposable = registerGoMainCodeLensRefresh(context, goMainCodeLensProvider);
+
   context.subscriptions.push(
     vscode.commands.registerCommand('go-pack-go.ping', () => {
       vscode.window.showInformationMessage('Go Pack Go is active.');
     }),
+    vscode.commands.registerCommand(runGoMainCommand, (argument: GoMainCodeLensCommandArgument) =>
+      runGoMainRunnerCommand(argument, {
+        logger: goMainLogger,
+        showErrorMessage: (message) => {
+          goMainLogger.error(message);
+          void vscode.window.showErrorMessage(message);
+        },
+      }),
+    ),
+    vscode.commands.registerCommand(debugGoMainCommand, (argument: GoMainCodeLensCommandArgument) =>
+      debugGoMainRunnerCommand(argument, {
+        logger: goMainLogger,
+        showErrorMessage: (message) => {
+          goMainLogger.error(message);
+          void vscode.window.showErrorMessage(message);
+        },
+      }),
+    ),
     vscode.commands.registerCommand(runTableTestScenarioCommand, (argument: VsCodeTableTestScenarioCommandArgument) =>
       runTableTestScenario(argument),
     ),
@@ -56,6 +89,11 @@ export function activate(context: vscode.ExtensionContext): void {
       { language: 'go', scheme: '*' },
       new TypeImplementationCodeLensProvider(),
     ),
+    vscode.languages.registerCodeLensProvider(
+      { language: 'go', scheme: '*' },
+      goMainCodeLensProvider,
+    ),
+    goMainRefreshDisposable,
   );
 }
 
@@ -116,6 +154,41 @@ class TypeImplementationCodeLensProvider implements vscode.CodeLensProvider {
         arguments: [argument],
       });
     });
+  }
+}
+
+class GoMainVsCodeCodeLensProvider implements vscode.CodeLensProvider {
+  private readonly provider = new GoMainCodeLensProvider();
+  private readonly changeEmitter = new vscode.EventEmitter<void>();
+
+  readonly onDidChangeCodeLenses = this.changeEmitter.event;
+
+  constructor() {
+    this.provider.onDidChangeCodeLenses(() => {
+      this.changeEmitter.fire();
+    });
+  }
+
+  async provideCodeLenses(document: vscode.TextDocument): Promise<vscode.CodeLens[]> {
+    const descriptors = await this.provider.provideCodeLensDescriptors(document);
+
+    return descriptors.map((descriptor) => new vscode.CodeLens(toVsCodeRange(descriptor.range), {
+      title: descriptor.title,
+      command: descriptor.command,
+      arguments: [...descriptor.arguments],
+    }));
+  }
+
+  invalidateDocument(documentUri: vscode.Uri): void {
+    this.provider.invalidateDocument(documentUri);
+  }
+
+  refreshDocument(documentUri?: vscode.Uri): void {
+    this.provider.refreshDocument(documentUri);
+  }
+
+  dispose(): void {
+    this.changeEmitter.dispose();
   }
 }
 
@@ -289,4 +362,71 @@ function toVsCodeRange(range: SourceRange): vscode.Range {
 
 function toVsCodePosition(position: SourceRange['start']): vscode.Position {
   return new vscode.Position(position.line, position.character);
+}
+
+function registerGoMainCodeLensRefresh(
+  context: vscode.ExtensionContext,
+  provider: GoMainVsCodeCodeLensProvider,
+): vscode.Disposable {
+  const pendingRefreshes = new Map<string, NodeJS.Timeout>();
+  const debounceDelayMs = 500;
+
+  const scheduleRefresh = (document: vscode.TextDocument): void => {
+    if (!isGoDocument(document)) {
+      return;
+    }
+
+    const cacheKey = document.uri.toString();
+    const pending = pendingRefreshes.get(cacheKey);
+    if (pending) {
+      clearTimeout(pending);
+    }
+
+    pendingRefreshes.set(cacheKey, setTimeout(() => {
+      pendingRefreshes.delete(cacheKey);
+      provider.invalidateDocument(document.uri);
+      provider.refreshDocument(document.uri);
+    }, debounceDelayMs));
+  };
+
+  const clearPendingRefresh = (document: vscode.TextDocument): void => {
+    const cacheKey = document.uri.toString();
+    const pending = pendingRefreshes.get(cacheKey);
+    if (pending) {
+      clearTimeout(pending);
+      pendingRefreshes.delete(cacheKey);
+    }
+  };
+
+  const flushAndDispose = (): void => {
+    for (const timeout of pendingRefreshes.values()) {
+      clearTimeout(timeout);
+    }
+    pendingRefreshes.clear();
+    provider.dispose();
+  };
+
+  const subscriptions = [
+    vscode.workspace.onDidChangeTextDocument((event) => {
+      scheduleRefresh(event.document);
+    }),
+    vscode.workspace.onDidSaveTextDocument((document) => {
+      clearPendingRefresh(document);
+      provider.invalidateDocument(document.uri);
+      provider.refreshDocument(document.uri);
+    }),
+    vscode.workspace.onDidCloseTextDocument((document) => {
+      clearPendingRefresh(document);
+      provider.invalidateDocument(document.uri);
+      provider.refreshDocument(document.uri);
+    }),
+    new vscode.Disposable(flushAndDispose),
+  ];
+
+  context.subscriptions.push(...subscriptions);
+  return new vscode.Disposable(() => {
+    for (const subscription of subscriptions) {
+      subscription.dispose();
+    }
+  });
 }
