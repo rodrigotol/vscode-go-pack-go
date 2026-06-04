@@ -313,7 +313,7 @@ Status: Done
 
 ### Task 8. Implement fallback-setting opt-in and restore flow
 
-Status: pending
+Status: Done
 
 - Add an explicit confirmation flow before changing `editor.gotoLocation.alternativeDefinitionCommand`.
 - When accepted:

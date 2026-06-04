@@ -1,6 +1,12 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 
+import {
+  AlternativeDefinitionFallbackManager,
+  enableSeparatedReferencesAlternativeDefinitionCommand,
+  restoreSeparatedReferencesAlternativeDefinitionCommand,
+  showSeparatedReferencesCommand,
+} from './alternativeDefinitionFallback';
 import { createGoMainLogger } from './goMainLogger';
 import {
   debugGoMainCommand as debugGoMainRunnerCommand,
@@ -50,13 +56,12 @@ interface VsCodeGoToTypeImplementationCommandArgument {
   readonly methodName?: string;
 }
 
-const showSeparatedReferencesCommand = 'go-pack-go.showSeparatedReferences';
-
 export function activate(context: vscode.ExtensionContext): void {
   const goMainLogger = createGoMainLogger();
   const goMainCodeLensProvider = new GoMainVsCodeCodeLensProvider();
   const goMainRefreshDisposable = registerGoMainCodeLensRefresh(context, goMainCodeLensProvider);
   const readWriteReferencesController = new ReadWriteReferencesController(context.extensionUri);
+  const alternativeDefinitionFallbackManager = new AlternativeDefinitionFallbackManager(context);
 
   context.subscriptions.push(
     vscode.commands.registerCommand('go-pack-go.ping', () => {
@@ -92,6 +97,12 @@ export function activate(context: vscode.ExtensionContext): void {
     ),
     vscode.commands.registerCommand(showSeparatedReferencesCommand, () =>
       readWriteReferencesController.showForActiveEditor(),
+    ),
+    vscode.commands.registerCommand(enableSeparatedReferencesAlternativeDefinitionCommand, () =>
+      alternativeDefinitionFallbackManager.enableSeparatedReferencesFallback({ forcePrompt: true }),
+    ),
+    vscode.commands.registerCommand(restoreSeparatedReferencesAlternativeDefinitionCommand, () =>
+      alternativeDefinitionFallbackManager.restorePreviousSeparatedReferencesFallback(),
     ),
     vscode.languages.registerCodeLensProvider(
       { language: 'go', scheme: '*' },
