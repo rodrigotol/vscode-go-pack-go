@@ -297,7 +297,7 @@ Status: Done
 
 ### Task 7. Wire extension commands and panel messaging
 
-Status: pending
+Status: Done
 
 - Register `go-pack-go.showSeparatedReferences`.
 - Accept invocation without explicit arguments so the command works from:
