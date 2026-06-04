@@ -327,7 +327,7 @@ Status: Done
 
 ### Task 9. Add package contributions for commands and fallback helpers
 
-Status: pending
+Status: Done
 
 - Update `package.json` with:
   - the main command contribution
@@ -337,7 +337,7 @@ Status: pending
 
 ### Task 10. Add UI serialization and interaction tests
 
-Status: pending
+Status: Done
 
 - Add tests for:
   - initial panel payload
@@ -348,7 +348,7 @@ Status: pending
 
 ### Task 11. Add tests for fallback-setting management
 
-Status: pending
+Status: Done
 
 - Add tests for:
   - confirmation accepted updates the setting target correctly
@@ -359,7 +359,7 @@ Status: pending
 
 ### Task 12. Run the automated test suite
 
-Status: pending
+Status: Done
 
 - Run the existing test command.
 - Fix any compile or regression failures.
@@ -395,3 +395,11 @@ Status: pending
 - The extension can persist the previous fallback command value so the user can restore it later.
 - A workbench panel with custom preview is an acceptable v1 replacement for the native over-editor peek widget.
 - `read-write` is the conservative fallback classification whenever `document highlights` do not safely classify a reference as `read` or `write`.
+
+# Pending problems:
+- Panel still not reopening once it is closed
+- On double click, target code file is opened on the panel tab. The target code should open on the original tab (where the reference was inspected). The panel tab should never be replaced by another tab.
+- Reference list is not scrolling once the number of itens increase. Only the list should scroll not the panel
+
+# Pending improvements:
+- Can we load the entire file with native keyword, var, etc coloring?

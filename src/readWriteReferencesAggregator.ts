@@ -11,7 +11,7 @@ import {
   ReadWriteReferencesResult,
 } from './readWriteReferencesModel';
 
-const previewContextLineCount = 2;
+const previewContextLineCount = 5;
 
 export interface ReadWriteReferencesAggregatorDependencies {
   readonly classifyReference?: (
@@ -27,6 +27,7 @@ export interface ReadWriteReferencesAggregatorDependencies {
   ) => Thenable<readonly vscode.Location[] | undefined>;
   readonly getActiveTextEditor?: () => vscode.TextEditor | undefined;
   readonly openTextDocument?: (uri: vscode.Uri) => Thenable<vscode.TextDocument>;
+  readonly asRelativePath?: (pathOrUri: vscode.Uri, includeWorkspaceFolder?: boolean) => string;
 }
 
 export class ReadWriteReferencesAggregator {
@@ -36,6 +37,7 @@ export class ReadWriteReferencesAggregator {
   >;
   private readonly getActiveTextEditor: NonNullable<ReadWriteReferencesAggregatorDependencies['getActiveTextEditor']>;
   private readonly openTextDocument: NonNullable<ReadWriteReferencesAggregatorDependencies['openTextDocument']>;
+  private readonly asRelativePath: NonNullable<ReadWriteReferencesAggregatorDependencies['asRelativePath']>;
   private requestVersion = 0;
 
   constructor(dependencies: ReadWriteReferencesAggregatorDependencies = {}) {
@@ -43,6 +45,7 @@ export class ReadWriteReferencesAggregator {
     this.executeReferenceProvider = dependencies.executeReferenceProvider ?? defaultExecuteReferenceProvider;
     this.getActiveTextEditor = dependencies.getActiveTextEditor ?? (() => vscode.window.activeTextEditor);
     this.openTextDocument = dependencies.openTextDocument ?? vscode.workspace.openTextDocument;
+    this.asRelativePath = dependencies.asRelativePath ?? defaultAsRelativePath;
   }
 
   async buildForActiveEditor(
@@ -113,6 +116,7 @@ export class ReadWriteReferencesAggregator {
 
       return {
         uri: location.uri.toString(),
+        relativePath: this.asRelativePath(location.uri, false),
         range,
         classification,
         preview,
@@ -120,6 +124,7 @@ export class ReadWriteReferencesAggregator {
     } catch (error) {
       return {
         uri: location.uri.toString(),
+        relativePath: this.asRelativePath(location.uri, false),
         range,
         classification,
         preview: createPreviewError(range, toErrorMessage(error)),
@@ -247,4 +252,16 @@ function toErrorMessage(error: unknown): string {
   }
 
   return 'Unable to load preview for this reference.';
+}
+
+function defaultAsRelativePath(uri: vscode.Uri, includeWorkspaceFolder?: boolean): string {
+  const asRelativePath = (vscode.workspace as typeof vscode.workspace & {
+    asRelativePath?: (pathOrUri: vscode.Uri, includeWorkspaceFolder?: boolean) => string;
+  }).asRelativePath;
+
+  if (typeof asRelativePath === 'function') {
+    return asRelativePath(uri, includeWorkspaceFolder);
+  }
+
+  return uri.fsPath || uri.toString();
 }

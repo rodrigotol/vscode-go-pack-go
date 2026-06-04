@@ -20,6 +20,7 @@ export interface ReadWriteReferencePreview {
 
 export interface ReadWriteReferenceItem {
   readonly uri: string;
+  readonly relativePath?: string;
   readonly range: SourceRange;
   readonly classification: ReadWriteReferenceClassification;
   readonly preview?: ReadWriteReferencePreview;

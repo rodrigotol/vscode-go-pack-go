@@ -3,7 +3,6 @@ import * as vscode from 'vscode';
 import {
   ReadWriteReferenceClassification,
   ReadWriteReferenceItem,
-  ReadWriteReferencePreview,
   ReadWriteReferencesResult,
 } from './readWriteReferencesModel';
 
@@ -29,6 +28,13 @@ export type ReadWriteReferencesPanelIncomingMessage =
   | ReadWriteReferencesPanelActionMessage
   | ReadWriteReferencesPanelRefreshMessage;
 
+export interface ReadWriteReferencesPanelViewState {
+  readonly result: ReadWriteReferencesResult | null;
+  readonly showReads: boolean;
+  readonly showWrites: boolean;
+  readonly selectedReferenceKey?: string;
+}
+
 export class ReadWriteReferencesPanel implements vscode.Disposable {
   private readonly panel: vscode.WebviewPanel;
   private readonly disposables: vscode.Disposable[] = [];
@@ -44,7 +50,7 @@ export class ReadWriteReferencesPanel implements vscode.Disposable {
     );
   }
 
-  static create(extensionUri: vscode.Uri): ReadWriteReferencesPanel {
+  static create(_extensionUri: vscode.Uri): ReadWriteReferencesPanel {
     const panel = vscode.window.createWebviewPanel(
       'goPackGoReadWriteReferences',
       'Read/Write References',
@@ -58,14 +64,14 @@ export class ReadWriteReferencesPanel implements vscode.Disposable {
     const readWritePanel = new ReadWriteReferencesPanel(panel);
     readWritePanel.panel.iconPath = new vscode.ThemeIcon('references');
     readWritePanel.panel.title = 'Read/Write References';
-    readWritePanel.panel.reveal(vscode.ViewColumn.Beside, true);
+    readWritePanel.panel.reveal(vscode.ViewColumn.Beside, false);
 
     return readWritePanel;
   }
 
   reveal(result: ReadWriteReferencesResult): void {
     this.panel.title = `Read/Write References: ${result.query.symbolLabel}`;
-    this.panel.reveal(vscode.ViewColumn.Beside, true);
+    this.panel.reveal(vscode.ViewColumn.Beside, false);
     void this.postMessage({
       type: 'setResult',
       result,
@@ -113,6 +119,128 @@ export function filterReferences(
   return references.filter((reference) => matchesFilter(reference.classification, filters));
 }
 
+export function createInitialPanelViewState(): ReadWriteReferencesPanelViewState {
+  return {
+    result: null,
+    showReads: true,
+    showWrites: true,
+    selectedReferenceKey: undefined,
+  };
+}
+
+export function createSetResultPanelMessage(result: ReadWriteReferencesResult): ReadWriteReferencesPanelMessage {
+  return {
+    type: 'setResult',
+    result,
+  };
+}
+
+export function createClearPanelMessage(): ReadWriteReferencesPanelMessage {
+  return {
+    type: 'clear',
+  };
+}
+
+export function applyPanelMessage(
+  state: ReadWriteReferencesPanelViewState,
+  message: ReadWriteReferencesPanelMessage,
+): ReadWriteReferencesPanelViewState {
+  if (message.type === 'clear') {
+    return createInitialPanelViewState();
+  }
+
+  return {
+    ...state,
+    result: message.result,
+    selectedReferenceKey: undefined,
+  };
+}
+
+export function togglePanelFilter(
+  state: ReadWriteReferencesPanelViewState,
+  filter: 'reads' | 'writes',
+): ReadWriteReferencesPanelViewState {
+  if (filter === 'reads') {
+    return {
+      ...state,
+      showReads: !state.showReads,
+    };
+  }
+
+  return {
+    ...state,
+    showWrites: !state.showWrites,
+  };
+}
+
+export function getFilteredPanelReferences(
+  state: ReadWriteReferencesPanelViewState,
+): readonly ReadWriteReferenceItem[] {
+  if (!state.result) {
+    return [];
+  }
+
+  return filterReferences(state.result.references, {
+    showReads: state.showReads,
+    showWrites: state.showWrites,
+  });
+}
+
+export function selectPanelReference(
+  state: ReadWriteReferencesPanelViewState,
+  reference: ReadWriteReferenceItem,
+): ReadWriteReferencesPanelViewState {
+  return {
+    ...state,
+    selectedReferenceKey: createReferenceKey(reference),
+  };
+}
+
+export function getSelectedPanelReference(
+  state: ReadWriteReferencesPanelViewState,
+): ReadWriteReferenceItem | undefined {
+  const references = getFilteredPanelReferences(state);
+  if (references.length === 0) {
+    return undefined;
+  }
+
+  return references.find((reference) => createReferenceKey(reference) === state.selectedReferenceKey) ?? references[0];
+}
+
+export function createReferenceRevealMessage(
+  reference: ReadWriteReferenceItem,
+): ReadWriteReferencesPanelActionMessage {
+  return {
+    type: 'revealReference',
+    reference,
+  };
+}
+
+export function createReferenceOpenMessage(
+  reference: ReadWriteReferenceItem,
+): ReadWriteReferencesPanelActionMessage {
+  return {
+    type: 'openReference',
+    reference,
+  };
+}
+
+export function createRefreshCurrentSymbolMessage(): ReadWriteReferencesPanelRefreshMessage {
+  return {
+    type: 'refreshCurrentSymbol',
+  };
+}
+
+export function createReferenceKey(reference: ReadWriteReferenceItem): string {
+  return [
+    reference.uri,
+    reference.range.start.line,
+    reference.range.start.character,
+    reference.range.end.line,
+    reference.range.end.character,
+  ].join(':');
+}
+
 function matchesFilter(
   classification: ReadWriteReferenceClassification,
   filters: {
@@ -147,25 +275,15 @@ function getWebviewHtml(webview: vscode.Webview): string {
     <style>
       :root {
         color-scheme: light dark;
-        --panel-border: var(--vscode-panel-border);
-        --panel-background: var(--vscode-editor-background);
-        --surface-background: color-mix(in srgb, var(--vscode-editor-background) 90%, var(--vscode-sideBar-background) 10%);
-        --surface-muted: color-mix(in srgb, var(--vscode-editor-background) 78%, var(--vscode-sideBar-background) 22%);
         --text-primary: var(--vscode-foreground);
-        --text-secondary: var(--vscode-descriptionForeground);
-        --text-accent: var(--vscode-textLink-foreground);
+        --text-secondary: color-mix(in srgb, var(--vscode-descriptionForeground) 80%, var(--vscode-foreground) 20%);
         --border-subtle: color-mix(in srgb, var(--vscode-panel-border) 72%, transparent);
         --selected-background: var(--vscode-list-activeSelectionBackground);
         --selected-foreground: var(--vscode-list-activeSelectionForeground);
         --hover-background: var(--vscode-list-hoverBackground);
-        --button-background: var(--vscode-button-secondaryBackground);
-        --button-foreground: var(--vscode-button-secondaryForeground);
-        --button-hover-background: var(--vscode-button-secondaryHoverBackground);
-        --button-active-background: color-mix(in srgb, var(--vscode-button-background) 82%, transparent);
-        --button-active-foreground: var(--vscode-button-foreground);
-        --read-accent: var(--vscode-testing-iconPassed);
-        --write-accent: var(--vscode-testing-iconFailed);
-        --mixed-accent: var(--vscode-terminal-ansiYellow);
+        --white-accent: var(--vscode-terminal-ansiWhite);
+        --filter-active-background: color-mix(in srgb, var(--vscode-foreground) 28%, transparent);
+        --filter-inactive-foreground: color-mix(in srgb, var(--vscode-descriptionForeground) 85%, var(--vscode-foreground) 15%);
         --error-accent: var(--vscode-errorForeground);
         --font-family: var(--vscode-font-family);
         --font-mono: var(--vscode-editor-font-family);
@@ -178,113 +296,88 @@ function getWebviewHtml(webview: vscode.Webview): string {
       body {
         margin: 0;
         min-height: 100vh;
-        background:
-          radial-gradient(circle at top right, color-mix(in srgb, var(--vscode-textLink-foreground) 16%, transparent), transparent 28%),
-          linear-gradient(180deg, color-mix(in srgb, var(--vscode-editor-background) 92%, var(--vscode-sideBar-background) 8%), var(--vscode-editor-background));
+        background: linear-gradient(
+          180deg,
+          color-mix(in srgb, var(--vscode-editor-background) 92%, var(--vscode-sideBar-background) 8%),
+          var(--vscode-editor-background)
+        );
         color: var(--text-primary);
         font-family: var(--font-family);
       }
 
-      button,
-      input,
-      textarea,
-      select {
+      button {
         font: inherit;
       }
 
       .app {
         display: grid;
-        grid-template-rows: auto auto minmax(0, 1fr);
+        grid-template-rows: auto minmax(0, 1fr);
         min-height: 100vh;
       }
 
       .header {
-        padding: 18px 20px 14px;
-        border-bottom: 1px solid var(--border-subtle);
-        background: color-mix(in srgb, var(--vscode-editor-background) 84%, var(--vscode-sideBar-background) 16%);
-      }
-
-      .eyebrow {
-        margin: 0;
-        font-size: 11px;
-        letter-spacing: 0.14em;
-        text-transform: uppercase;
-        color: var(--text-secondary);
-      }
-
-      .title-row {
         display: flex;
-        align-items: end;
+        align-items: center;
         justify-content: space-between;
         gap: 12px;
-        margin-top: 8px;
+        padding: 14px 16px;
+        border-bottom: 1px solid var(--border-subtle);
+        background: color-mix(in srgb, var(--vscode-editor-background) 90%, var(--vscode-sideBar-background) 10%);
       }
 
-      .title {
-        margin: 0;
-        font-size: 20px;
-        font-weight: 700;
-        line-height: 1.2;
-      }
-
-      .subtitle {
-        margin-top: 6px;
-        color: var(--text-secondary);
-        font-size: 12px;
-      }
-
-      .counts {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 8px;
-        justify-content: end;
-      }
-
-      .header-actions {
+      .header-main {
         display: flex;
         align-items: center;
         gap: 10px;
-        justify-content: end;
-        margin-top: 10px;
-      }
-
-      .count-pill {
-        padding: 6px 10px;
-        border-radius: 999px;
-        background: var(--surface-muted);
-        border: 1px solid var(--border-subtle);
-        font-size: 12px;
-        white-space: nowrap;
+        min-width: 0;
       }
 
       .filters {
         display: flex;
-        gap: 10px;
-        padding: 14px 20px;
-        border-bottom: 1px solid var(--border-subtle);
-        background: color-mix(in srgb, var(--vscode-editor-background) 88%, var(--vscode-sideBar-background) 12%);
+        align-items: center;
+        gap: 8px;
       }
 
       .filter-button {
         appearance: none;
-        border: 1px solid var(--border-subtle);
-        background: var(--button-background);
-        color: var(--button-foreground);
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        width: 34px;
+        height: 34px;
         border-radius: 999px;
-        padding: 8px 14px;
+        border: 1px solid var(--border-subtle);
+        background: transparent;
+        color: var(--filter-inactive-foreground);
         cursor: pointer;
-        transition: background 120ms ease, border-color 120ms ease, transform 120ms ease;
+        font-size: 16px;
+        transition: background 120ms ease, border-color 120ms ease, color 120ms ease;
       }
 
       .filter-button:hover {
-        background: var(--button-hover-background);
+        background: color-mix(in srgb, var(--vscode-foreground) 10%, transparent);
       }
 
       .filter-button.is-active {
-        background: var(--button-active-background);
-        color: var(--button-active-foreground);
-        border-color: color-mix(in srgb, var(--vscode-button-background) 55%, transparent);
-        transform: translateY(-1px);
+        background: var(--filter-active-background);
+        border-color: color-mix(in srgb, var(--vscode-foreground) 34%, transparent);
+      }
+
+      .filter-button.is-active.read {
+        color: var(--white-accent);
+      }
+
+      .filter-button.is-active.write {
+        color: var(--white-accent);
+      }
+
+      .count-pill {
+        padding: 4px 10px;
+        border-radius: 999px;
+        border: 1px solid var(--border-subtle);
+        background: color-mix(in srgb, var(--vscode-editor-background) 82%, var(--vscode-sideBar-background) 18%);
+        font-size: 12px;
+        white-space: nowrap;
       }
 
       .toolbar-button {
@@ -295,7 +388,7 @@ function getWebviewHtml(webview: vscode.Webview): string {
         border-radius: 999px;
         padding: 7px 12px;
         cursor: pointer;
-        transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+        transition: background 120ms ease, color 120ms ease;
       }
 
       .toolbar-button:hover {
@@ -305,7 +398,7 @@ function getWebviewHtml(webview: vscode.Webview): string {
 
       .content {
         display: grid;
-        grid-template-columns: minmax(280px, 0.95fr) minmax(340px, 1.05fr);
+        grid-template-rows: minmax(160px, 0.7fr) minmax(320px, 1.3fr);
         min-height: 0;
       }
 
@@ -315,7 +408,7 @@ function getWebviewHtml(webview: vscode.Webview): string {
       }
 
       .list-pane {
-        border-right: 1px solid var(--border-subtle);
+        border-bottom: 1px solid var(--border-subtle);
         background: color-mix(in srgb, var(--vscode-sideBar-background) 52%, var(--vscode-editor-background) 48%);
       }
 
@@ -328,9 +421,13 @@ function getWebviewHtml(webview: vscode.Webview): string {
       }
 
       .reference-item {
-        padding: 14px 16px 14px 18px;
-        border-left: 3px solid transparent;
-        border-bottom: 1px solid color-mix(in srgb, var(--border-subtle) 55%, transparent);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 7px 12px;
+        border-left: 2px solid transparent;
+        border-bottom: 2px solid color-mix(in srgb, var(--vscode-editor-background) 100%, transparent);
         cursor: pointer;
       }
 
@@ -341,77 +438,60 @@ function getWebviewHtml(webview: vscode.Webview): string {
       .reference-item.is-selected {
         background: var(--selected-background);
         color: var(--selected-foreground);
-        border-left-color: var(--text-accent);
+        border-left-color: color-mix(in srgb, var(--selected-foreground) 74%, transparent);
       }
 
-      .reference-item.is-selected .reference-meta,
       .reference-item.is-selected .reference-path,
-      .reference-item.is-selected .reference-snippet {
+      .reference-item.is-selected .reference-line {
         color: inherit;
       }
 
-      .reference-topline {
+      .reference-main {
         display: flex;
         align-items: center;
-        justify-content: space-between;
-        gap: 12px;
+        gap: 10px;
+        min-width: 0;
+      }
+
+      .kind-icon {
+        display: inline-flex;
+        align-items: center;
+        justify-content: center;
+        min-width: 28px;
+        font-size: 14px;
+        color: var(--text-secondary);
+      }
+
+      .kind-icon.read {
+        color: var(--white-accent);
+      }
+
+      .kind-icon.write {
+        color: var(--white-accent);
+      }
+
+      .kind-icon.read-write {
+        color: var(--white-accent);
       }
 
       .reference-path {
-        font-size: 12px;
-        color: var(--text-secondary);
+        min-width: 0;
         overflow: hidden;
         text-overflow: ellipsis;
         white-space: nowrap;
-      }
-
-      .reference-meta {
-        margin-top: 6px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-        font-size: 11px;
-        color: var(--text-secondary);
-      }
-
-      .reference-snippet {
-        margin-top: 8px;
-        font-family: var(--font-mono);
         font-size: 12px;
         color: var(--text-primary);
-        overflow: hidden;
-        text-overflow: ellipsis;
-        white-space: nowrap;
       }
 
-      .kind-badge {
-        display: inline-flex;
-        align-items: center;
-        gap: 6px;
-        padding: 3px 8px;
-        border-radius: 999px;
-        border: 1px solid currentColor;
+      .reference-line {
         font-size: 11px;
-        text-transform: uppercase;
-        letter-spacing: 0.06em;
-      }
-
-      .kind-badge.read {
-        color: var(--read-accent);
-      }
-
-      .kind-badge.write {
-        color: var(--write-accent);
-      }
-
-      .kind-badge.read-write {
-        color: var(--mixed-accent);
+        color: var(--text-secondary);
+        white-space: nowrap;
       }
 
       .preview-pane {
         overflow: auto;
-        background:
-          linear-gradient(180deg, color-mix(in srgb, var(--vscode-editor-background) 94%, var(--vscode-sideBar-background) 6%), var(--vscode-editor-background));
+        background: color-mix(in srgb, var(--vscode-editor-background) 96%, var(--vscode-sideBar-background) 4%);
       }
 
       .preview-empty,
@@ -425,39 +505,13 @@ function getWebviewHtml(webview: vscode.Webview): string {
       }
 
       .preview {
-        padding: 18px 20px 20px;
-      }
-
-      .preview-header {
-        display: flex;
-        align-items: start;
-        justify-content: space-between;
-        gap: 16px;
-        margin-bottom: 14px;
-      }
-
-      .preview-actions {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-      }
-
-      .preview-title {
-        margin: 0;
-        font-size: 15px;
-        font-weight: 700;
-      }
-
-      .preview-subtitle {
-        margin-top: 6px;
-        font-size: 12px;
-        color: var(--text-secondary);
+        padding: 10px 12px 12px;
       }
 
       .preview-code {
         margin: 0;
         border: 1px solid var(--border-subtle);
-        border-radius: 14px;
+        border-radius: 10px;
         overflow: hidden;
         background: color-mix(in srgb, var(--vscode-textCodeBlock-background) 90%, var(--vscode-editor-background) 10%);
       }
@@ -470,7 +524,6 @@ function getWebviewHtml(webview: vscode.Webview): string {
       .code-line {
         display: grid;
         grid-template-columns: 52px minmax(0, 1fr);
-        gap: 0;
         font-family: var(--font-mono);
         font-size: 12px;
         line-height: 1.5;
@@ -504,23 +557,9 @@ function getWebviewHtml(webview: vscode.Webview): string {
       }
 
       @media (max-width: 820px) {
-        .content {
-          grid-template-columns: 1fr;
-          grid-template-rows: minmax(220px, 0.9fr) minmax(260px, 1.1fr);
-        }
-
-        .list-pane {
-          border-right: none;
-          border-bottom: 1px solid var(--border-subtle);
-        }
-
-        .title-row {
-          align-items: start;
+        .header {
+          align-items: flex-start;
           flex-direction: column;
-        }
-
-        .counts {
-          justify-content: start;
         }
       }
     </style>
@@ -528,7 +567,6 @@ function getWebviewHtml(webview: vscode.Webview): string {
   <body>
     <div class="app">
       <header class="header" id="header"></header>
-      <div class="filters" id="filters"></div>
       <div class="content">
         <section class="list-pane" aria-label="References list">
           <div id="list-root" class="empty-state">Waiting for references.</div>
@@ -550,7 +588,6 @@ function getWebviewHtml(webview: vscode.Webview): string {
       };
 
       const headerRoot = document.getElementById('header');
-      const filtersRoot = document.getElementById('filters');
       const listRoot = document.getElementById('list-root');
       const previewRoot = document.getElementById('preview-root');
 
@@ -586,11 +623,13 @@ function getWebviewHtml(webview: vscode.Webview): string {
           return;
         }
 
+        if (event.key === 'Enter') {
+          event.preventDefault();
+          postReferenceMessage('openReference', filtered[getSelectedIndex(filtered)]);
+          return;
+        }
+
         if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
-          if (event.key === 'Enter') {
-            event.preventDefault();
-            postReferenceMessage('openReference', filtered[getSelectedIndex(filtered)]);
-          }
           return;
         }
 
@@ -604,63 +643,38 @@ function getWebviewHtml(webview: vscode.Webview): string {
 
       function render() {
         renderHeader();
-        renderFilters();
         renderList();
         renderPreview();
         vscode.setState(state);
       }
 
       function renderHeader() {
-        if (!state.result) {
-          headerRoot.innerHTML = [
-            '<p class="eyebrow">Go Pack Go</p>',
-            '<div class="title-row">',
-            '  <div>',
-            '    <h1 class="title">Read/Write References</h1>',
-            '    <div class="subtitle">Run the command on a Go symbol to inspect separated references.</div>',
-            '  </div>',
-            '</div>',
-          ].join('');
-          return;
-        }
-
-        const { query, counts, references } = state.result;
+        const count = state.result ? state.result.references.length : 0;
         headerRoot.innerHTML = [
-          '<p class="eyebrow">Go Pack Go</p>',
-          '<div class="title-row">',
-          '  <div>',
-            '    <h1 class="title">' + escapeHtml(query.symbolLabel) + '</h1>',
-          '    <div class="subtitle">' + escapeHtml(formatUriLabel(query.uri)) + ' • ' + references.length + ' references</div>',
-          '  </div>',
-          '  <div>',
-          '    <div class="counts">',
-          '      <span class="count-pill">Reads ' + counts.read + '</span>',
-          '      <span class="count-pill">Writes ' + counts.write + '</span>',
-          '      <span class="count-pill">Mixed ' + counts.readWrite + '</span>',
-          '    </div>',
-          '    <div class="header-actions">',
-          '      <button type="button" class="toolbar-button" id="refresh-button">Refresh</button>',
-          '    </div>',
-          '  </div>',
+          '<div class="header-main">',
+          '  <div class="filters" id="filters"></div>',
+          '  <span class="count-pill">References: ' + count + '</span>',
           '</div>',
+          '<button type="button" class="toolbar-button" id="refresh-button">Refresh</button>',
         ].join('');
+
+        const filtersRoot = document.getElementById('filters');
+        if (filtersRoot) {
+          filtersRoot.innerHTML = '';
+          filtersRoot.appendChild(createFilterButton(iconForClassification('read'), 'Reads', 'read', state.showReads, () => {
+            state.showReads = !state.showReads;
+            render();
+          }));
+          filtersRoot.appendChild(createFilterButton(iconForClassification('write'), 'Writes', 'write', state.showWrites, () => {
+            state.showWrites = !state.showWrites;
+            render();
+          }));
+        }
 
         const refreshButton = document.getElementById('refresh-button');
         refreshButton?.addEventListener('click', () => {
           vscode.postMessage({ type: 'refreshCurrentSymbol' });
         });
-      }
-
-      function renderFilters() {
-        filtersRoot.innerHTML = '';
-        filtersRoot.appendChild(createFilterButton('Reads', state.showReads, () => {
-          state.showReads = !state.showReads;
-          render();
-        }));
-        filtersRoot.appendChild(createFilterButton('Writes', state.showWrites, () => {
-          state.showWrites = !state.showWrites;
-          render();
-        }));
       }
 
       function renderList() {
@@ -689,7 +703,6 @@ function getWebviewHtml(webview: vscode.Webview): string {
             item.classList.add('is-selected');
           }
 
-          item.dataset.key = referenceKey(reference);
           item.tabIndex = -1;
           item.addEventListener('click', () => {
             selectReference(reference);
@@ -699,14 +712,14 @@ function getWebviewHtml(webview: vscode.Webview): string {
             postReferenceMessage('openReference', reference);
           });
 
-          const kindClass = reference.classification;
+          const lineNumber = reference.preview?.lineNumber ?? reference.range.start.line + 1;
+          const displayPath = reference.relativePath ?? formatUriLabel(reference.uri);
           item.innerHTML = [
-            '<div class="reference-topline">',
-            '  <div class="reference-path" title="' + escapeHtml(formatUriLabel(reference.uri)) + '">' + escapeHtml(formatUriLabel(reference.uri)) + '</div>',
-            '  <span class="kind-badge ' + kindClass + '">' + escapeHtml(formatClassification(reference.classification)) + '</span>',
+            '<div class="reference-main">',
+            '  <span class="kind-icon ' + reference.classification + '">' + escapeHtml(iconForClassification(reference.classification)) + '</span>',
+            '  <div class="reference-path" title="' + escapeHtml(displayPath) + '">' + escapeHtml(displayPath) + '</div>',
             '</div>',
-            '<div class="reference-meta">Line ' + (reference.preview?.lineNumber ?? reference.range.start.line + 1) + '</div>',
-            '<div class="reference-snippet">' + escapeHtml(firstPreviewLine(reference.preview)) + '</div>',
+            '<div class="reference-line">' + lineNumber + '</div>',
           ].join('');
           list.appendChild(item);
         }
@@ -748,16 +761,6 @@ function getWebviewHtml(webview: vscode.Webview): string {
 
         previewRoot.className = 'preview';
         previewRoot.innerHTML = [
-          '<div class="preview-header">',
-          '  <div>',
-          '    <h2 class="preview-title">' + escapeHtml(formatUriLabel(selectedReference.uri)) + '</h2>',
-          '    <div class="preview-subtitle">Line ' + preview.lineNumber + ' • ' + escapeHtml(formatClassification(selectedReference.classification)) + '</div>',
-          '  </div>',
-          '  <div class="preview-actions">',
-          '    <button type="button" class="toolbar-button" id="open-button">Open</button>',
-          '    <span class="kind-badge ' + selectedReference.classification + '">' + escapeHtml(formatClassification(selectedReference.classification)) + '</span>',
-          '  </div>',
-          '</div>',
           '<div class="preview-code">',
           '  <div class="code-lines">' + codeLines + '</div>',
           '</div>',
@@ -765,20 +768,17 @@ function getWebviewHtml(webview: vscode.Webview): string {
             ? '<div class="preview-error">' + escapeHtml(preview.errorMessage) + '</div>'
             : '',
         ].join('');
-
-        const openButton = document.getElementById('open-button');
-        openButton?.addEventListener('click', () => {
-          postReferenceMessage('openReference', selectedReference);
-        });
       }
 
-      function createFilterButton(label, isActive, onClick) {
+      function createFilterButton(label, tooltip, kind, isActive, onClick) {
         const button = document.createElement('button');
-        button.className = 'filter-button';
+        button.className = 'filter-button ' + kind;
         if (isActive) {
           button.classList.add('is-active');
         }
         button.type = 'button';
+        button.title = tooltip;
+        button.setAttribute('aria-label', tooltip);
         button.textContent = label;
         button.addEventListener('click', onClick);
         return button;
@@ -814,7 +814,6 @@ function getWebviewHtml(webview: vscode.Webview): string {
       function selectReference(reference, rerender = true) {
         state.selectedUri = reference.uri;
         state.selectedRangeKey = referenceKey(reference);
-        postReferenceMessage('revealReference', reference);
         if (rerender) {
           render();
         }
@@ -851,22 +850,16 @@ function getWebviewHtml(webview: vscode.Webview): string {
         });
       }
 
-      function firstPreviewLine(preview) {
-        if (!preview || !preview.snippet) {
-          return preview?.errorMessage ?? 'Preview unavailable';
+      function iconForClassification(classification) {
+        if (classification === 'read') {
+          return '⌕';
         }
 
-        const lines = preview.snippet.split('\\n');
-        const index = Math.max(0, preview.highlightLine - preview.snippetRange.start.line);
-        return lines[index] ?? lines[0] ?? 'Preview unavailable';
-      }
-
-      function formatClassification(classification) {
-        if (classification === 'read-write') {
-          return 'Mixed';
+        if (classification === 'write') {
+          return '✎';
         }
 
-        return classification.charAt(0).toUpperCase() + classification.slice(1);
+        return '⧓';
       }
 
       function formatUriLabel(uri) {
@@ -914,4 +907,3 @@ function createNonce(): string {
 
   return nonce;
 }
-
