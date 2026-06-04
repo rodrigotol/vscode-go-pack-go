@@ -9,6 +9,9 @@ export interface GoMainLaunchConfiguration {
   readonly env?: Record<string, string>;
   readonly buildFlags?: string | readonly string[];
   readonly args?: readonly string[];
+  readonly mode?: string;
+  readonly console?: string;
+  readonly showLog?: boolean;
 }
 
 export interface GoMainLaunchConfigurationMatch {
@@ -293,11 +296,18 @@ function asGoMainLaunchConfiguration(configuration: unknown): GoMainLaunchConfig
     env,
     buildFlags,
     args,
+    mode: asOptionalString(candidate.mode),
+    console: asOptionalString(candidate.console),
+    showLog: asOptionalBoolean(candidate.showLog),
   };
 }
 
 function asOptionalString(value: unknown): string | undefined {
   return typeof value === 'string' ? value : undefined;
+}
+
+function asOptionalBoolean(value: unknown): boolean | undefined {
+  return typeof value === 'boolean' ? value : undefined;
 }
 
 function asStringArray(value: unknown): readonly string[] | undefined {
