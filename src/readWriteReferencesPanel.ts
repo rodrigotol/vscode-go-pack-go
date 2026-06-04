@@ -16,6 +16,19 @@ type ReadWriteReferencesPanelMessage =
       readonly type: 'clear';
     };
 
+export interface ReadWriteReferencesPanelActionMessage {
+  readonly type: 'revealReference' | 'openReference';
+  readonly reference: ReadWriteReferenceItem;
+}
+
+export interface ReadWriteReferencesPanelRefreshMessage {
+  readonly type: 'refreshCurrentSymbol';
+}
+
+export type ReadWriteReferencesPanelIncomingMessage =
+  | ReadWriteReferencesPanelActionMessage
+  | ReadWriteReferencesPanelRefreshMessage;
+
 export class ReadWriteReferencesPanel implements vscode.Disposable {
   private readonly panel: vscode.WebviewPanel;
   private readonly disposables: vscode.Disposable[] = [];
@@ -62,6 +75,17 @@ export class ReadWriteReferencesPanel implements vscode.Disposable {
   clear(): void {
     this.panel.title = 'Read/Write References';
     void this.postMessage({ type: 'clear' });
+  }
+
+  onDidReceiveMessage(
+    listener: (message: ReadWriteReferencesPanelIncomingMessage) => void,
+    thisArg?: unknown,
+  ): vscode.Disposable {
+    return this.panel.webview.onDidReceiveMessage(listener, thisArg, this.disposables);
+  }
+
+  onDidDispose(listener: () => void, thisArg?: unknown): vscode.Disposable {
+    return this.panel.onDidDispose(listener, thisArg, this.disposables);
   }
 
   dispose(): void {
@@ -216,6 +240,14 @@ function getWebviewHtml(webview: vscode.Webview): string {
         justify-content: end;
       }
 
+      .header-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        justify-content: end;
+        margin-top: 10px;
+      }
+
       .count-pill {
         padding: 6px 10px;
         border-radius: 999px;
@@ -253,6 +285,22 @@ function getWebviewHtml(webview: vscode.Webview): string {
         color: var(--button-active-foreground);
         border-color: color-mix(in srgb, var(--vscode-button-background) 55%, transparent);
         transform: translateY(-1px);
+      }
+
+      .toolbar-button {
+        appearance: none;
+        border: 1px solid var(--border-subtle);
+        background: transparent;
+        color: var(--text-secondary);
+        border-radius: 999px;
+        padding: 7px 12px;
+        cursor: pointer;
+        transition: background 120ms ease, color 120ms ease, border-color 120ms ease;
+      }
+
+      .toolbar-button:hover {
+        background: var(--hover-background);
+        color: var(--text-primary);
       }
 
       .content {
@@ -386,6 +434,12 @@ function getWebviewHtml(webview: vscode.Webview): string {
         justify-content: space-between;
         gap: 16px;
         margin-bottom: 14px;
+      }
+
+      .preview-actions {
+        display: flex;
+        align-items: center;
+        gap: 10px;
       }
 
       .preview-title {
@@ -533,6 +587,10 @@ function getWebviewHtml(webview: vscode.Webview): string {
         }
 
         if (event.key !== 'ArrowDown' && event.key !== 'ArrowUp') {
+          if (event.key === 'Enter') {
+            event.preventDefault();
+            postReferenceMessage('openReference', filtered[getSelectedIndex(filtered)]);
+          }
           return;
         }
 
@@ -571,16 +629,26 @@ function getWebviewHtml(webview: vscode.Webview): string {
           '<p class="eyebrow">Go Pack Go</p>',
           '<div class="title-row">',
           '  <div>',
-          '    <h1 class="title">' + escapeHtml(query.symbolLabel) + '</h1>',
+            '    <h1 class="title">' + escapeHtml(query.symbolLabel) + '</h1>',
           '    <div class="subtitle">' + escapeHtml(formatUriLabel(query.uri)) + ' • ' + references.length + ' references</div>',
           '  </div>',
-          '  <div class="counts">',
-          '    <span class="count-pill">Reads ' + counts.read + '</span>',
-          '    <span class="count-pill">Writes ' + counts.write + '</span>',
-          '    <span class="count-pill">Mixed ' + counts.readWrite + '</span>',
+          '  <div>',
+          '    <div class="counts">',
+          '      <span class="count-pill">Reads ' + counts.read + '</span>',
+          '      <span class="count-pill">Writes ' + counts.write + '</span>',
+          '      <span class="count-pill">Mixed ' + counts.readWrite + '</span>',
+          '    </div>',
+          '    <div class="header-actions">',
+          '      <button type="button" class="toolbar-button" id="refresh-button">Refresh</button>',
+          '    </div>',
           '  </div>',
           '</div>',
         ].join('');
+
+        const refreshButton = document.getElementById('refresh-button');
+        refreshButton?.addEventListener('click', () => {
+          vscode.postMessage({ type: 'refreshCurrentSymbol' });
+        });
       }
 
       function renderFilters() {
@@ -625,6 +693,10 @@ function getWebviewHtml(webview: vscode.Webview): string {
           item.tabIndex = -1;
           item.addEventListener('click', () => {
             selectReference(reference);
+          });
+          item.addEventListener('dblclick', () => {
+            selectReference(reference);
+            postReferenceMessage('openReference', reference);
           });
 
           const kindClass = reference.classification;
@@ -681,7 +753,10 @@ function getWebviewHtml(webview: vscode.Webview): string {
           '    <h2 class="preview-title">' + escapeHtml(formatUriLabel(selectedReference.uri)) + '</h2>',
           '    <div class="preview-subtitle">Line ' + preview.lineNumber + ' • ' + escapeHtml(formatClassification(selectedReference.classification)) + '</div>',
           '  </div>',
-          '  <span class="kind-badge ' + selectedReference.classification + '">' + escapeHtml(formatClassification(selectedReference.classification)) + '</span>',
+          '  <div class="preview-actions">',
+          '    <button type="button" class="toolbar-button" id="open-button">Open</button>',
+          '    <span class="kind-badge ' + selectedReference.classification + '">' + escapeHtml(formatClassification(selectedReference.classification)) + '</span>',
+          '  </div>',
           '</div>',
           '<div class="preview-code">',
           '  <div class="code-lines">' + codeLines + '</div>',
@@ -690,6 +765,11 @@ function getWebviewHtml(webview: vscode.Webview): string {
             ? '<div class="preview-error">' + escapeHtml(preview.errorMessage) + '</div>'
             : '',
         ].join('');
+
+        const openButton = document.getElementById('open-button');
+        openButton?.addEventListener('click', () => {
+          postReferenceMessage('openReference', selectedReference);
+        });
       }
 
       function createFilterButton(label, isActive, onClick) {
@@ -734,6 +814,7 @@ function getWebviewHtml(webview: vscode.Webview): string {
       function selectReference(reference, rerender = true) {
         state.selectedUri = reference.uri;
         state.selectedRangeKey = referenceKey(reference);
+        postReferenceMessage('revealReference', reference);
         if (rerender) {
           render();
         }
@@ -804,6 +885,13 @@ function getWebviewHtml(webview: vscode.Webview): string {
           .replaceAll('>', '&gt;')
           .replaceAll('"', '&quot;')
           .replaceAll("'", '&#39;');
+      }
+
+      function postReferenceMessage(type, reference) {
+        vscode.postMessage({
+          type,
+          reference,
+        });
       }
 
       const persistedState = vscode.getState();
