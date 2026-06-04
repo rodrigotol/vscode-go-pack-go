@@ -161,6 +161,22 @@ test('enableSeparatedReferencesFallback leaves settings unchanged when the user 
   assert.deepEqual(configurationUpdates, []);
 });
 
+test('enableSeparatedReferencesFallback suppresses repeat prompts after a decline in the same session', async () => {
+  resetState();
+  const context = createExtensionContext();
+  inspectResult = {
+    globalValue: 'editor.action.peekDefinition',
+  };
+  nextPromptChoice = 'Not now';
+
+  const manager = new AlternativeDefinitionFallbackManager(context);
+  await manager.enableSeparatedReferencesFallback({ forcePrompt: false });
+  await manager.enableSeparatedReferencesFallback({ forcePrompt: false });
+
+  assert.equal(infoPrompts.length, 1);
+  assert.deepEqual(configurationUpdates, []);
+});
+
 test('restorePreviousSeparatedReferencesFallback reapplies the stored command and clears state', async () => {
   resetState();
   const context = createExtensionContext([
@@ -186,6 +202,27 @@ test('restorePreviousSeparatedReferencesFallback reapplies the stored command an
     },
   ]);
   assert.equal(context.store.has('go-pack-go.previousAlternativeDefinitionCommand'), false);
+});
+
+test('enableSeparatedReferencesFallback updates the global target when no workspace override exists', async () => {
+  resetState();
+  const context = createExtensionContext();
+  inspectResult = {
+    globalValue: 'editor.action.peekDefinition',
+  };
+  nextPromptChoice = 'Enable';
+
+  const manager = new AlternativeDefinitionFallbackManager(context);
+  await manager.enableSeparatedReferencesFallback();
+
+  assert.deepEqual(configurationUpdates, [
+    {
+      resource: undefined,
+      key: 'gotoLocation.alternativeDefinitionCommand',
+      value: showSeparatedReferencesCommand,
+      target: configurationTarget.Global,
+    },
+  ]);
 });
 
 function createExtensionContext(initialEntries: ReadonlyArray<readonly [string, unknown]> = []) {

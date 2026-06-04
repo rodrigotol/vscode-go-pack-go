@@ -16,7 +16,9 @@
     "golang",
     "codelens",
     "debug",
-    "testing"
+    "testing",
+    "references",
+    "navigation"
   ],
   "activationEvents": [
     "onLanguage:go"
@@ -33,8 +35,29 @@
       {
         "command": "go-pack-go.debugGoMain",
         "title": "Go Pack Go: Debug Go Main"
+      },
+      {
+        "command": "go-pack-go.showSeparatedReferences",
+        "title": "Go Pack Go: Show Read/Write References"
+      },
+      {
+        "command": "go-pack-go.enableSeparatedReferencesAlternativeDefinitionFallback",
+        "title": "Go Pack Go: Enable Read/Write References as Alternate Definition Fallback"
+      },
+      {
+        "command": "go-pack-go.restoreSeparatedReferencesAlternativeDefinitionFallback",
+        "title": "Go Pack Go: Restore Previous Alternate Definition Fallback"
       }
     ],
+    "menus": {
+      "editor/context": [
+        {
+          "command": "go-pack-go.showSeparatedReferences",
+          "when": "editorLangId == go",
+          "group": "navigation@25"
+        }
+      ]
+    },
     "configuration": {
       "title": "Go Pack Go",
       "properties": {

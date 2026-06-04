@@ -112,14 +112,16 @@ test('buildPreview includes surrounding lines and highlights the matched line', 
   assert.equal(
     preview.snippet,
     [
+      'package preview',
       'type sample struct {}',
       'func first() {}',
       'func second() { foo() }',
       'func third() {}',
       'func fourth() {}',
+      'func fifth() {}',
     ].join('\n'),
   );
-  assert.deepEqual(preview.snippetRange, createRange(1, 0, 5, 16));
+  assert.deepEqual(preview.snippetRange, createRange(0, 0, 6, 15));
   assert.deepEqual(preview.focusRange, createRange(3, 16, 3, 19));
   assert.equal(preview.highlightLine, 3);
   assert.equal(preview.lineNumber, 4);
