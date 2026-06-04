@@ -223,7 +223,7 @@ Reference discovery will be delegated to the existing Go language stack through 
 
 ### Task 1. Add the references domain model
 
-Status: pending
+Status: Done
 
 - Create a serializable domain model for:
   - query symbol metadata
@@ -235,7 +235,7 @@ Status: pending
 
 ### Task 2. Implement highlight-based classification
 
-Status: pending
+Status: Done
 
 - Create `src/readWriteReferenceHighlights.ts` or equivalent.
 - Call `vscode.executeDocumentHighlights` for a given reference location.
@@ -248,7 +248,7 @@ Status: pending
 
 ### Task 3. Build the references aggregation pipeline
 
-Status: pending
+Status: Done
 
 - Create an aggregation module that:
   - resolves the current symbol from the active editor and selection
@@ -261,7 +261,7 @@ Status: pending
 
 ### Task 4. Add unit tests for highlight classification
 
-Status: pending
+Status: Done
 
 - Add tests for:
   - `Read` mapping
