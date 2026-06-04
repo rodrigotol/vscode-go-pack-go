@@ -4,6 +4,7 @@ All notable changes to this extension pack will be documented in this file.
 
 ## 0.0.1
 
+- Added Fallback settings to Read-Write Reference Panel [#23](https://github.com/rodrigotol/vscode-go-pack-go/pull/23)
 - Wired Read-Write Reference Panel [#22](https://github.com/rodrigotol/vscode-go-pack-go/pull/22)
 - Added Read-Write Reference Panel UI [#21](https://github.com/rodrigotol/vscode-go-pack-go/pull/21)
 - Prepared Read-Write Reference Panel [#20](https://github.com/rodrigotol/vscode-go-pack-go/pull/20)
