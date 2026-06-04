@@ -273,7 +273,7 @@ Status: Done
 
 ### Task 5. Add unit tests for aggregation and preview building
 
-Status: pending
+Status: Done
 
 - Add tests for:
   - mixed read/write/read-write results
@@ -284,7 +284,7 @@ Status: pending
 
 ### Task 6. Implement the panel webview UI
 
-Status: pending
+Status: Done
 
 - Add a webview-backed panel with:
   - symbol header and counts
