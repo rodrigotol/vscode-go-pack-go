@@ -130,5 +130,10 @@
   "dependencies": {
     "tree-sitter-wasms": "^0.1.13",
     "web-tree-sitter": "^0.20.8"
+  },
+  "icon": "resources/gophermechanic.png",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/rodrigotol/vscode-go-pack-go.git"
   }
 }
