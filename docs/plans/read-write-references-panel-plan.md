@@ -1,405 +1,201 @@
-# Read/Write References Panel Plan
+# Build Tasks — Enhanced "Go to References" Extension
+A reproducible, ordered task list to rebuild this VS Code extension from an
+empty folder, capturing every tech choice and decision (and the gotchas we hit).
+---
+## Goal
+Replace the native "Go to References" experience with a custom panel that:
+- lists references in a **flat list** (no tree nesting),
+- shows per-reference **Read / Write / Other** indicators,
+- filters by those three kinds,
+- previews the selected reference in a **real, fully-interactive editor** beside
+ the origin file (full file, native hovers/go-to-def), without ever closing the
+ tab the action was triggered from:
+ - **single click** → transient preview beside (focus stays in the list),
+ - **double click** → open permanently in the main column + close the side preview,
+ - **panel hidden/closed** → the side preview is closed automatically.
+Triggered initially from a new **editor context-menu** entry.
+---
+## Tech choices (decided)
+| Area | Choice | Why |
+|------|--------|-----|
+| Language | TypeScript, strict | Standard for VS Code extensions; catches API misuse. |
+| Bundler | esbuild (`node esbuild.js`) | Fast, simple, single-file `out/extension.js`. |
+| List UI | **Native `TreeView` rendered flat** (not a webview, not a tree) | Free keyboard nav / type-ahead / theming / a11y; lowest effort & risk. Webview only buys cosmetics at high cost. |
+| Preview | **Real editor** in `ViewColumn.Beside`, `preview:true`, `preserveFocus:true` | A real `TextEditor` keeps full language-server interactivity; can't be embedded in a webview/panel anyway. |
+| Classification | **Language-server driven** via `documentHighlight` kinds; no heuristics | Accurate where the server is strong (gopls); no fragile source parsing. |
+| Buckets | **Read / Write / Other** (no "mixed") | 100% read-or-write is impossible (declarations, type/func/package uses are neither); "Other" is the honest home. |
+| Languages | **Go-first** (gopls), engine generic | Matches the JetBrains GoLand reference; engine still works best-effort elsewhere. |
+| Dock | Bottom **Panel** view container | Natural home for "find usages" results (like Search/Problems). |
+### Key decisions & rationale
+- **List is decoupled from engine + preview.** `referenceEngine`, `classification`,
+ and `previewController` know nothing about the UI, so the list surface can be
+ swapped (e.g. to a webview later) without touching them.
+- **Origin tab is never disturbed.** Preview opens in a *separate* editor group as a
+ single reused preview tab; focus stays in the list so arrow keys keep navigating.
+- **Kind icons use the default text color** (no red/write, green/read tint — explicit
+ user preference). Kinds are distinguished by codicon shape + a `<kind> ·` label.
+- **Classification precedence:** when several highlights overlap one reference, keep
+ the strongest signal **Write > Read > Other** (the highlight command merges all
+ providers, so a generic `Text` highlight must not mask a real `Write`).
+
+### ⚠️ Gotchas we hit (do not repeat)
+1. **The highlight command is `vscode.executeDocumentHighlights` — NOT
+  `vscode.executeDocumentHighlightProvider`.** It breaks the `...Provider` naming
+  convention every other command follows. Using the wrong name throws
+  "command not found"; if you swallow that in a try/catch you silently get zero
+  highlights and everything falls to "Other". This was the main bug.
+2. **`@types/vscode` lags the app.** Latest published was `1.120.0` while the app was
+  `1.123.x`. Pin `@types/vscode` and `engines.vscode` to `^1.120.0` (the newer app
+  still satisfies it). `npm i @types/vscode@^1.123` fails with ETARGET.
+3. **`executeReferenceProvider` returns NO read/write data** — that only exists in
+  `documentHighlight`. Hence the two-call design.
+4. gopls *does* classify composite-literal struct field keys (`T{field: v}`) as
+  **Write** — verified over LSP. If you see them as "Other", the bug is yours, not
+  gopls's.
+---
+## Tasks
+### Task 1 — Scaffold config
+- Update: `package.json` — manifest (see Task 6 for `contributes`); scripts `compile`
+ (`node esbuild.js`), `watch`, `typecheck` (`tsc --noEmit`); devDeps
+ `typescript@^5.6`, `esbuild@^0.28`, `@types/node@^22`, `@types/vscode@^1.120`;
+ `engines.vscode: ^1.120.0`; `main: ./out/extension.js`.
+- `.gitignore` (`node_modules/`, `out/`, `*.vsix`), `.vscodeignore`.
+- `.vscode/launch.json` (`extensionHost`, `--extensionDevelopmentPath=${workspaceFolder}`,
+ `preLaunchTask: npm: compile`) and `.vscode/tasks.json` (npm compile/watch).
+Create:
+- `tsconfig.json` — `module commonjs`, `target ES2022`, `strict`, `outDir out`,
+ `rootDir src`.
+- `esbuild.js` — bundle `src/extension.ts` → `out/extension.js`, `external: ["vscode"]`,
+ `platform node`, `format cjs`, `sourcemap`, `--watch` support.
+Verify: `npm install` succeeds.
+### Task 2 — Types (`src/readWriteReferencesTypes.ts`)
+- `enum RefKind { Write="write", Read="read", Other="other" }`.
+- `interface ClassifiedReference { uri; range; kind; lineText }`.
+- `KIND_ORDER = [Write, Read, Other]`; `kindLabel(kind)`.
+### Task 3 — Classification (`src/readWriteReferencesClassification.ts`)
+- `highlightKindToRefKind(DocumentHighlightKind?)`: `Write`→Write, `Read`→Read,
+ everything else (incl. `Text`/undefined) → Other.
+- `classifyByHighlights(range, highlights)`: among all highlights overlapping the
+ reference (`hl.range.contains(range.start) || range.contains(hl.range.start)`),
+ return the **highest-precedence** kind (Write > Read > Other). Default Other.
+
+### Task 4 — Reference engine (`src/readWriteReferencesEngine.ts`)
+- `findClassifiedReferences(uri, position, token)`:
+ 1. `executeCommand("vscode.executeReferenceProvider", uri, position)` → `Location[]`.
+ 2. Group by file.
+ 3. Per file: `highlightsAt(fileUri, firstRef.range.start)` →
+    `executeCommand("vscode.executeDocumentHighlights", fileUri, position)`.
+    **(correct command name!)**
+ 4. Classify each reference via `classifyByHighlights`. **Fallback:** any reference
+    still `Other` → re-query `highlightsAt` anchored on its *own* start position and
+    reclassify (covers partial/empty per-file sets).
+ 5. Read `lineText` via `workspace.openTextDocument` + `doc.lineAt(...).text.trim()`.
+- `highlightsAt` makes a **single** call (no retry loop) and **logs — does not
+ swallow — errors** via `src/log.ts`. Swallowing a failure here once hid the
+ wrong-command-name bug (see Gotcha #1); always surface it.
+- `src/log.ts`: a minimal Output channel ("Enhanced References"). It is **not**
+ auto-revealed on each run. Used only for an activation line and highlight errors.
+ (Verbose per-reference/per-attempt diagnostics were used during development and
+ then removed — do not ship them.)
+### Task 5 — UI layer
+- `src/readWriteReferencesFilterState.ts` — visibility per `RefKind`; `toggle(kind)` flips a bool, sets
+ context keys `enhancedReferences.show{Write,Read,Other}`, fires `onDidChange`.
+- `src/readWriteReferencesTreeProvider.ts` — **flat** `TreeDataProvider<ClassifiedReference>`:
+ - `getChildren(undefined)` → references filtered by `filter.isVisible(kind)`,
+   sorted by file then position; `getChildren(ref)` → `[]`.
+ - `getTreeItem(ref)`: `iconPath = KIND_ICON[kind]` (plain `ThemeIcon`, **no color**:
+   `pencil`=write, `eye`=read, `circle-outline`=other); label = `ref.lineText`;
+   `description = "<kind> · relPath:line"`; `command = openReference` with the ref.
+ - `setReferences(symbolLabel, refs)`, `clear()`, `summary()` →
+   e.g. `calculator — 3 (W1 R1 O1)`.
+
+### Task 6 - preview Contoller
+- `src/readWriteReferencesPreviewController.ts` — owns the preview lifecycle. State: `previewUri`
+ (current side preview), `originColumn` (the "main" column, set per search).
+ Methods:
+ - `setOriginColumn(column)` — remember `editor.viewColumn` from the search.
+ - `preview(ref)` (single click): `showTextDocument(doc, { viewColumn: Beside,
+   preview: true, preserveFocus: true, selection: ref.range })`; record `previewUri`.
+ - `openPermanent(ref)` (double click): `showTextDocument(doc, { viewColumn:
+   originColumn, preview: false, preserveFocus: false, selection: ref.range })`,
+   then `closePreviewTab()`. Opens a real tab in the main column and removes the
+   side preview (the emptied beside group auto-collapses).
+ - `closePreviewTab()` — scan `vscode.window.tabGroups.all`; close the tab whose
+   `input instanceof TabInputText` matches `previewUri` **and** `tab.isPreview` is
+   true (never close a tab the user promoted to permanent). Clears `previewUri`.
+ - Both open paths call `revealRange(range, InCenterIfOutsideViewport)` +
+   `setDecorations`. The decoration type (created once, disposed on deactivate):
+   `backgroundColor: ThemeColor("editor.findMatchHighlightBackground")`,
+   `borderRadius: "2px"`,
+   `overviewRulerColor: ThemeColor("editorOverviewRuler.findMatchForeground")`,
+   `overviewRulerLane: OverviewRulerLane.Center`.
+
+### Task 7 — Manifest `contributes`
+- `activationEvents: []` — activation is auto-derived from the contributed command;
+ no explicit event needed.
+- `commands`: `findReferences` ("Find References (Enhanced)"), `openReference`,
+ and `toggleWrite/Read/Other` each with a codicon (`$(pencil)`, `$(eye)`,
+ `$(symbol-misc)`). NOTE: the toggle buttons do **not** swap icons to show on/off
+ state — `FilterState` sets context keys, but the manifest has no `when`-gated
+ alternate icons, so there's no visual toggled state. (Intentional v1 simplicity;
+ add alternate icons later if wanted.)
+- `menus.editor/context`: `findReferences`, `when: editorTextFocus`, `group: navigation@99`.
+- `viewsContainers.panel`: container `enhancedReferences` (icon `$(references)`).
+- `views.enhancedReferences`: one view `enhancedReferences.referencesView`, `type: "tree"`.
+- `menus.view/title`: `toggleWrite` (`navigation@1`), `toggleRead` (`@2`),
+ `toggleOther` (`@3`), all `when: view == enhancedReferences.referencesView`.
+### Task 8 — Wire it (`src/extension.ts`)
+- `activate`: create the Output channel eagerly; `FilterState`, `ReferencesTreeProvider`,
+ `PreviewController`; `createTreeView(VIEW_ID, { treeDataProvider })`; register all
+ commands; push everything to `context.subscriptions`.
+- **Close preview on panel hide:** `treeView.onDidChangeVisibility(e => { if
+ (!e.visible) preview.closePreviewTab(); })`. CAVEAT: this fires whenever the view
+ is hidden — including switching to another panel tab (Terminal/Problems/Output),
+ not strictly a full panel close; the preview closes in those cases too. (If too
+ aggressive, debounce it or tie the preview to the search session instead.)
+- **Emulated double-click** (TreeView fires only single clicks). Keep
+ `lastClick = { key, time }` in closure scope; `DOUBLE_CLICK_MS = 250`. In the
+ `openReference` handler build `key = uri#line:char`; if the same key was clicked
+ within the window → `preview.openPermanent(ref)` (and reset `lastClick`), else
+ `preview.preview(ref)` (and record `lastClick`).
+- `findReferences` handler:
+ - if no active editor → `showInformationMessage("… open a file and place the cursor
+   on a symbol first.")` and return;
+ - `preview.setOriginColumn(editor.viewColumn)` — the column a double-click opens into;
+ - read `document.uri`, `selection.active`, and the word at cursor (fallback
+   `"symbol"`) for the label;
+ - **Loading state (avoids the panel flashing while results load):** before
+   searching, `treeProvider.clear()` and set
+   `treeView.message = 'Searching for references to "…"…'` so an already-open
+   panel shows a clean header instead of stale rows.
+ - run the search under `withProgress` with **`location: ProgressLocation.Window`**
+   (status bar) — NOT `{ viewId }`. Using the view location reveals a closed panel
+   mid-load and looks glitchy; the status bar doesn't.
+ - call the engine; `setReferences(label, refs)`;
+ - if `refs.length === 0` → set `treeView.message = 'No references found for "…".'`
+   and `showInformationMessage(...)`, then return (do **not** reveal the panel);
+ - else set `treeView.message = summary() || undefined` and **only then** reveal the
+   panel with `${VIEW_ID}.focus` — so the panel never appears half-loaded.
+- `deactivate` is a no-op (all disposables are in `context.subscriptions`).
+
+### Task 9 — Build & verify
+- `npm run typecheck` (clean) and `npm run compile` (produces `out/extension.js`).
+- **F5** → Extension Development Host. Open a Go workspace (gopls installed).
+- Right-click a struct field used for reads and writes → **Find References (Enhanced)**.
+- Confirm: flat list with kind icons; a composite-literal key (`field: v`) shows
+ **Write**, a selector read (`x.field`) shows **Read**, the declaration shows **Other**.
+- Single-click rows: preview opens **beside**, origin tab stays open, the **same
+ preview tab is reused**, focus stays in the list. Preview is a real editor
+ (hover/go-to-def work).
+- **Double-click a row** (within 250 ms): it opens as a permanent tab in the main
+ column and the side preview tab disappears.
+- **Close the references panel:** the side preview tab is closed automatically.
+- Toggle each filter in the view title.
+- **Reload after each rebuild with Cmd+R in the dev host** — otherwise the old bundle runs.
+---
+## Out of scope (v1)
+- Webview / GoLand pixel-match list (swap only the list surface later if wanted).
+- "Mixed" bucket / heuristic classification.
+- Per-language tuning beyond Go.
+- Marketplace packaging (`vsce package` flow).
 
-## Summary
-
-Add a third Go navigation feature to the existing `go-pack-go` extension: a custom references experience that separates read references from write references for the symbol under the cursor.
-
-The feature will not attempt to modify VS Code's native `Go to References` popup. Instead, it will add a new command that opens a custom panel-style references UI with:
-
-- a references list
-- a code preview area
-- two visual filters: `Reads` and `Writes`
-
-Reference discovery will be delegated to the existing Go language stack through VS Code's reference provider pipeline. Read/write separation will be computed by this extension from `DocumentHighlightKind` when available, with a conservative `read-write` fallback for references the provider does not classify explicitly.
-
-## Key Changes
-
-- Add a new command, for example `go-pack-go.showSeparatedReferences`.
-- Reuse the Go extension and `gopls` indirectly through `vscode.executeReferenceProvider` to fetch references for the symbol at the active cursor position.
-- Add a read/write classification layer that returns whether the matched usage is:
-  - `read`
-  - `write`
-  - `read-write`
-- Prefer `vscode.executeDocumentHighlights` and `DocumentHighlightKind` as the source of explicit classification.
-- Treat references without an explicit `Read` or `Write` classification as `read-write` so they remain visible in both filters.
-- Add a references aggregation module that:
-  - resolves reference locations to document snippets
-  - classifies each reference
-  - groups items into read/write buckets for presentation
-- Add a custom panel UI hosted by the extension that shows:
-  - current symbol summary
-  - read/write filter controls
-  - grouped reference list
-  - preview of the selected reference with the target line highlighted
-- Add commands for list interaction:
-  - open selected reference
-  - reveal selected reference in the editor
-  - refresh results for the current symbol
-- Keep the existing table-test and type-implementation features unchanged.
-
-## UI And Behavior
-
-### Entry Point
-
-- The feature is exposed by a new explicit command rather than replacing `editor.action.goToReferences`.
-- v1 may optionally contribute the command to the editor context menu for Go files, but must not override the native references action or keybinding.
-- v1 should support use as the alternate definition fallback command through the user setting `editor.gotoLocation.alternativeDefinitionCommand`.
-- The extension must not silently rewrite user settings.
-- The extension should offer an explicit confirmation flow that, when accepted by the user, updates:
-  - `"editor.gotoLocation.alternativeDefinitionCommand": "go-pack-go.showSeparatedReferences"`
-- The extension should remember the previous fallback command before changing it so the user can restore it later.
-- The command runs only when:
-  - the active editor is a Go file
-  - there is a symbol-like token under the cursor
-
-### Panel Layout
-
-- Open results in a custom panel attached to the workbench, not a new editor tab.
-- The panel must contain three regions:
-  - header with symbol name and counts
-  - filter row with `Reads` and `Writes`
-  - split content area with references list on one side and preview on the other
-- The list must visually distinguish the selected item and the reference kind.
-- The preview must show:
-  - file path
-  - line number
-  - a small code excerpt around the reference
-  - highlight for the matched occurrence line
-
-### Filtering
-
-- Default filter shows both `Reads` and `Writes`.
-- Clicking `Reads` hides write-only results.
-- Clicking `Writes` hides read-only results.
-- `read-write` results appear in both views.
-- `read-write` results must be visually marked as mixed or unclassified.
-
-### Navigation
-
-- Selecting a list item updates the preview immediately.
-- Single-click or keyboard focus on a list item reveals the location in the active editor without stealing focus from the panel.
-- Open action on a list item jumps to the file and position in the main editor.
-- The panel stays open until the user closes it or runs the command again for another symbol.
-- When invoked through `editor.gotoLocation.alternativeDefinitionCommand`, the command must behave the same as direct invocation and use the active editor selection as the query position.
-
-### Failure And Empty States
-
-- If the cursor is not on a symbol, show a concise error.
-- If no references are found, show an empty state in the panel rather than failing silently.
-- If references are found but classification is unavailable for some items, still show them as `read-write`.
-- If a referenced document cannot be opened, keep the item in the list and show a preview error for that item only.
-- If the user declines the fallback-setting confirmation, the feature must continue working via direct command invocation with no repeated nagging in the same session.
-
-## Classification Strategy
-
-### Reference Discovery
-
-- Use `vscode.commands.executeCommand('vscode.executeReferenceProvider', uri, position)` as the source of truth for reference locations.
-- Do not implement a custom `ReferenceProvider` in v1.
-- Do not attempt workspace-wide symbol resolution with Tree-sitter alone.
-
-### Read/Write Classification
-
-- Classification is local to each returned reference location.
-- For each reference location:
-  - first query `vscode.commands.executeCommand('vscode.executeDocumentHighlights', uri, position)`
-  - if a matching highlight is found with kind `Read` or `Write`, use that as the classification source of truth
-  - if matching highlights are conflicting, overlapping, or otherwise not uniquely classifiable, mark the reference as `read-write`
-  - if no matching highlight exists, or the provider returns only plain text highlights, mark the reference as `read-write`
-
-### Highlight-First Rules
-
-- A matching `DocumentHighlightKind.Read` maps to `read`.
-- A matching `DocumentHighlightKind.Write` maps to `write`.
-- If the provider returns overlapping or conflicting highlight kinds for the same range, classify as `read-write`.
-- If the provider returns `Text` only, classify as `read-write`.
-- If the provider returns no usable matching highlight for the reference location, classify as `read-write`.
-
-### Scope Limits
-
-- v1 relies entirely on language-provider highlights for explicit read/write detection.
-- v1 does not infer semantic side effects or perform fallback syntactic classification.
-- v1 does not attempt AST analysis, alias tracking, SSA, or full type-checking for reference classification.
-- v1 does not claim Goland-level precision for complex mutation flows.
-- The extension should prefer `read-write` over making a confident wrong classification or hiding a potentially important reference.
-
-## Implementation Changes
-
-### Shared Domain Model
-
-- Add a serializable references domain model with:
-  - symbol label
-  - source query location
-  - reference URI
-  - reference range
-  - classification kind
-  - preview snippet metadata
-- Keep this module free of VS Code UI types where practical, mirroring the current detector pattern.
-
-### Highlight Resolver Module
-
-- Add a VS Code-facing module, for example `src/readWriteReferenceHighlights.ts`.
-- Responsibilities:
-  - call `vscode.executeDocumentHighlights`
-  - match the returned highlight to a specific reference range or position
-  - map `DocumentHighlightKind` into the extension's classification model
-  - return `read-write` when the provider result is absent, plain-text only, conflicting, or ambiguous
-
-### Aggregation Module
-
-- Add a coordinator module that:
-  - invokes `vscode.executeReferenceProvider`
-  - attempts highlight-based classification per reference
-  - loads each referenced document
-  - builds preview excerpts
-  - returns grouped UI-ready data
-- Keep cancellation support so repeated invocations do not race stale results into the panel.
-
-### Panel UI
-
-- Add a webview-backed panel or panel-hosted webview for the custom references experience.
-- The webview owns:
-  - rendering
-  - filter state
-  - keyboard selection state
-  - preview updates from extension-host messages
-- Theme the UI using VS Code theme tokens rather than hardcoded colors.
-- Match the density and navigation feel of references/peek UI, but do not copy internal VS Code markup.
-
-### Extension Wiring
-
-- Update `src/extension.ts` to register:
-  - the new top-level command
-  - panel lifecycle management
-  - message handlers for open/reveal/filter actions
-- Add commands for fallback setting management:
-  - enable this extension as `editor.gotoLocation.alternativeDefinitionCommand`
-  - restore the previous fallback command when known
-- Validate invocation with no explicit arguments so the command works both from the Command Palette and from `editor.gotoLocation.alternativeDefinitionCommand`.
-- Keep existing CodeLens provider registration untouched.
-
-### Package Contributions
-
-- Update `package.json` with:
-  - the new command contribution
-  - optional editor/context menu entry for Go files
-  - activation remains `onLanguage:go`; no extra language dependency is needed beyond `golang.go`
-- Add helper command contributions for:
-  - enabling this extension as the alternate definition fallback
-  - restoring the previous alternate definition fallback
-
-## Test Plan
-
-- Add highlight resolver tests covering:
-  - mapping `DocumentHighlightKind.Read` to `read`
-  - mapping `DocumentHighlightKind.Write` to `write`
-  - plain-text-only highlight results mapping to `read-write`
-  - no-highlight results mapping to `read-write`
-  - conflicting highlight matches mapping to `read-write`
-- Add aggregation tests covering:
-  - mixed read/write results
-  - `read-write` fallback on unclassified references
-  - preview excerpt generation
-  - empty reference result handling
-- Add panel message/serialization tests covering:
-  - initial payload shape
-  - filter state transitions
-  - open/reveal command payloads
-  - count updates for reads and writes
-- Manually verify in Extension Development Host:
-  - command opens the panel from a Go symbol
-  - command works when invoked indirectly through `editor.gotoLocation.alternativeDefinitionCommand`
-  - accepting the confirmation updates the fallback setting correctly
-  - declining the confirmation leaves user settings unchanged
-  - restoring the previous fallback command works when previous state is known
-  - list renders references from multiple files
-  - `Reads` and `Writes` filters update the list correctly
-  - selecting a result updates the preview
-  - opening a result navigates to the right file and position
-  - unsaved edits in an open document are reflected when references are recomputed
-  - existing table-test and implementation CodeLens features remain unchanged
-
-## Execution Breakdown
-
-### Task 1. Add the references domain model
-
-Status: Done
-
-- Create a serializable domain model for:
-  - query symbol metadata
-  - reference location
-  - classification kind: `read | write | read-write`
-  - preview snippet metadata
-- Keep the module free of VS Code UI classes where practical.
-- Done when the model compiles and is suitable for both extension-host logic and webview payloads.
-
-### Task 2. Implement highlight-based classification
-
-Status: Done
-
-- Create `src/readWriteReferenceHighlights.ts` or equivalent.
-- Call `vscode.executeDocumentHighlights` for a given reference location.
-- Match the returned highlight to the exact location or nearest compatible range.
-- Map:
-  - `Read` => `read`
-  - `Write` => `write`
-  - conflicting, missing, or `Text` => `read-write`
-- Done when the module returns stable classification results from provider output only.
-
-### Task 3. Build the references aggregation pipeline
-
-Status: Done
-
-- Create an aggregation module that:
-  - resolves the current symbol from the active editor and selection
-  - invokes `vscode.executeReferenceProvider`
-  - classifies each reference through the highlight resolver
-  - loads preview snippets for each result
-  - produces grouped, UI-ready data
-- Add cancellation/version guards so repeated invocations do not publish stale results.
-- Done when one call returns the complete panel payload for a symbol.
-
-### Task 4. Add unit tests for highlight classification
-
-Status: Done
-
-- Add tests for:
-  - `Read` mapping
-  - `Write` mapping
-  - `Text` mapping to `read-write`
-  - no-highlight mapping to `read-write`
-  - conflicting highlight mapping to `read-write`
-- Done when classification behavior is locked by tests.
-
-### Task 5. Add unit tests for aggregation and preview building
-
-Status: Done
-
-- Add tests for:
-  - mixed read/write/read-write results
-  - preview excerpt generation
-  - empty reference results
-  - cancellation or stale-result protection
-- Done when the aggregation payload shape and fallback behavior are locked.
-
-### Task 6. Implement the panel webview UI
-
-Status: Done
-
-- Add a webview-backed panel with:
-  - symbol header and counts
-  - `Reads` and `Writes` filters
-  - references list
-  - preview pane
-- Ensure `read-write` entries remain visible in both filters and are visually marked as mixed.
-- Use VS Code theme tokens and keyboard-friendly interactions.
-- Done when the panel can render a mock payload correctly and respond to selection/filter changes.
-
-### Task 7. Wire extension commands and panel messaging
-
-Status: Done
-
-- Register `go-pack-go.showSeparatedReferences`.
-- Accept invocation without explicit arguments so the command works from:
-  - Command Palette
-  - editor context menu
-  - `editor.gotoLocation.alternativeDefinitionCommand`
-- Add message handlers for:
-  - reveal reference
-  - open reference
-  - refresh current symbol
-- Keep existing commands unchanged.
-- Done when the command opens the panel and drives real data end to end.
-
-### Task 8. Implement fallback-setting opt-in and restore flow
-
-Status: Done
-
-- Add an explicit confirmation flow before changing `editor.gotoLocation.alternativeDefinitionCommand`.
-- When accepted:
-  - capture and persist the previous fallback command value
-  - update the setting to `go-pack-go.showSeparatedReferences`
-- When declined:
-  - leave settings unchanged
-  - suppress repeated prompting for the same session or until a later explicit trigger
-- Add a restore command that reapplies the previous fallback command when one was captured.
-- Done when fallback-setting changes are fully opt-in, reversible, and do not require manual JSON editing.
-
-### Task 9. Add package contributions for commands and fallback helpers
-
-Status: Done
-
-- Update `package.json` with:
-  - the main command contribution
-  - optional editor/context menu contribution
-  - helper commands for enabling and restoring the alternate definition fallback
-- Done when the feature surface is discoverable through VS Code command/menu contributions.
-
-### Task 10. Add UI serialization and interaction tests
-
-Status: Done
-
-- Add tests for:
-  - initial panel payload
-  - filter toggling
-  - selection-driven preview updates
-  - open/reveal action payloads
-- Done when panel state transitions are stable and command payloads are verified.
-
-### Task 11. Add tests for fallback-setting management
-
-Status: Done
-
-- Add tests for:
-  - confirmation accepted updates the setting target correctly
-  - previous fallback command is stored before overwrite
-  - decline path leaves configuration unchanged
-  - restore command reapplies the captured previous value
-- Done when the opt-in configuration flow is locked by tests.
-
-### Task 12. Run the automated test suite
-
-Status: Done
-
-- Run the existing test command.
-- Fix any compile or regression failures.
-- Done when all old and new tests pass together.
-
-### Task 13. Perform manual verification
-
-Status: pending
-
-- In the Extension Development Host, verify:
-  - direct command invocation works on Go symbols
-  - the panel shows references and preview correctly
-  - `Reads` and `Writes` filters behave as specified
-  - `read-write` fallback entries remain visible in both filters
-  - the command works as the configured `editor.gotoLocation.alternativeDefinitionCommand`
-  - existing table-test and implementation CodeLens features remain unchanged
-- Done when the end-to-end behavior matches the plan.
-
-## Suggested Agent Split
-
-- Agent 1: domain model, highlight resolver, and aggregation pipeline
-- Agent 2: tests for classification, aggregation, and payload serialization
-- Agent 3: webview panel UI and command wiring
-- Agent 4: fallback-setting opt-in/restore flow, package contributions, and final regression review
-
-## Assumptions
-
-- The new plan file should live at `docs/plans/read-write-references-panel-plan.md`.
-- The official Go extension plus `gopls` remain the source of truth for finding references.
-- The official Go extension plus `gopls` are also expected to provide useful `document highlights` for many in-file read/write classifications, but the extension must tolerate missing or incomplete highlight kinds.
-- The feature will be presented as a new command, not as a modification of VS Code's native references popup.
-- The extension may update `editor.gotoLocation.alternativeDefinitionCommand` only after explicit user confirmation.
-- The extension can persist the previous fallback command value so the user can restore it later.
-- A workbench panel with custom preview is an acceptable v1 replacement for the native over-editor peek widget.
-- `read-write` is the conservative fallback classification whenever `document highlights` do not safely classify a reference as `read` or `write`.
-
-# Pending problems:
-- Panel still not reopening once it is closed
-- On double click, target code file is opened on the panel tab. The target code should open on the original tab (where the reference was inspected). The panel tab should never be replaced by another tab.
-- Reference list is not scrolling once the number of itens increase. Only the list should scroll not the panel
-
-# Pending improvements:
-- Can we load the entire file with native keyword, var, etc coloring?

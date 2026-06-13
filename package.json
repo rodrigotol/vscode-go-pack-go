@@ -1,12 +1,12 @@
 {
   "name": "go-pack-go",
   "displayName": "Go Pack Go",
-  "description": "VS Code Go productivity features for table tests, type implementations, and main entrypoints.",
+  "description": "VS Code Go productivity features for table tests, type implementations, main entrypoints and enhanced find references",
   "version": "0.0.1",
-  "publisher": "rodriag",
+  "publisher": "rodrigotol",
   "main": "./out/extension.js",
   "engines": {
-    "vscode": "^1.90.0"
+    "vscode": "^1.120.0"
   },
   "categories": [
     "Programming Languages"
@@ -16,9 +16,7 @@
     "golang",
     "codelens",
     "debug",
-    "testing",
-    "references",
-    "navigation"
+    "testing"
   ],
   "activationEvents": [
     "onLanguage:go"
@@ -37,24 +35,70 @@
         "title": "Go Pack Go: Debug Go Main"
       },
       {
-        "command": "go-pack-go.showSeparatedReferences",
-        "title": "Go Pack Go: Show Read/Write References"
+        "command": "go-pack-go.findReferences",
+        "title": "Go to References (Go Pack Go)"
       },
       {
-        "command": "go-pack-go.enableSeparatedReferencesAlternativeDefinitionFallback",
-        "title": "Go Pack Go: Enable Read/Write References as Alternate Definition Fallback"
+        "command": "go-pack-go.openReference",
+        "title": "Open Reference"
       },
       {
-        "command": "go-pack-go.restoreSeparatedReferencesAlternativeDefinitionFallback",
-        "title": "Go Pack Go: Restore Previous Alternate Definition Fallback"
+        "command": "go-pack-go.toggleWrite",
+        "title": "Toggle Write Usages",
+        "icon": "$(pencil)"
+      },
+      {
+        "command": "go-pack-go.toggleRead",
+        "title": "Toggle Read Usages",
+        "icon": "$(eye)"
+      },
+      {
+        "command": "go-pack-go.toggleOther",
+        "title": "Toggle Other Usages",
+        "icon": "$(symbol-misc)"
       }
     ],
+    "viewsContainers": {
+      "panel": [
+        {
+          "id": "go-pack-go",
+          "title": "Go Pack Go - References",
+          "icon": "$(references)"
+        }
+      ]
+    },
+    "views": {
+      "go-pack-go": [
+        {
+          "id": "go-pack-go.referencesView",
+          "name": "References",
+          "type": "tree"
+        }
+      ]
+    },
     "menus": {
       "editor/context": [
         {
-          "command": "go-pack-go.showSeparatedReferences",
-          "when": "editorLangId == go",
-          "group": "navigation@25"
+          "command": "go-pack-go.findReferences",
+          "when": "editorTextFocus",
+          "group": "navigation@99"
+        }
+      ],
+      "view/title": [
+        {
+          "command": "go-pack-go.toggleWrite",
+          "when": "view == go-pack-go.referencesView",
+          "group": "navigation@1"
+        },
+        {
+          "command": "go-pack-go.toggleRead",
+          "when": "view == go-pack-go.referencesView",
+          "group": "navigation@2"
+        },
+        {
+          "command": "go-pack-go.toggleOther",
+          "when": "view == go-pack-go.referencesView",
+          "group": "navigation@3"
         }
       ]
     },
@@ -71,13 +115,16 @@
   },
   "scripts": {
     "vscode:prepublish": "npm run compile",
-    "compile": "tsc -p ./",
-    "watch": "tsc -watch -p ./",
+    "compile": "node esbuild.js",
+    "typecheck": "tsc --noEmit",
+    "watch": "node esbuild.js --watch",
+    "package": "vsce package",
     "test": "npm run compile && node --test \"out/**/*.test.js\""
   },
   "devDependencies": {
     "@types/node": "^20.19.41",
-    "@types/vscode": "^1.90.0",
+    "@types/vscode": "^1.120.0",
+    "esbuild": "^0.28.0",
     "typescript": "^5.5.2"
   },
   "dependencies": {

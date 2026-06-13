@@ -1,12 +1,6 @@
 import * as path from 'path';
 import * as vscode from 'vscode';
 
-import {
-  AlternativeDefinitionFallbackManager,
-  enableSeparatedReferencesAlternativeDefinitionCommand,
-  restoreSeparatedReferencesAlternativeDefinitionCommand,
-  showSeparatedReferencesCommand,
-} from './alternativeDefinitionFallback';
 import { createGoMainLogger } from './goMainLogger';
 import {
   debugGoMainCommand as debugGoMainRunnerCommand,
@@ -27,18 +21,20 @@ import {
   TableTestScenarioCommandArgument,
 } from './testTableCodeLens';
 import { detectTestTableScenarios } from './testTableDetector';
-import { ReadWriteReferencesAggregator } from './readWriteReferencesAggregator';
-import {
-  ReadWriteReferencesPanel,
-  ReadWriteReferencesPanelIncomingMessage,
-} from './readWriteReferencesPanel';
 import {
   createTypeImplementationCodeLensDescriptors,
   GoToTypeImplementationCommandArgument,
   goToTypeImplementationCommand,
 } from './typeImplementationCodeLens';
 import { detectTypeImplementations, TypeImplementationTargetKind } from './typeImplementationDetector';
-import { ReadWriteReferenceItem, ReadWriteReferencesResult } from './readWriteReferencesModel';
+import { FilterState } from './readWriteReferencesFilterState';
+import { ReferencesTreeProvider } from './readWriteReferencesTreeProvider';
+import { PreviewController } from './readWriteReferencesPreviewController';
+import { ClassifiedReference, RefKind } from './readWriteReferencesTypes';
+import { findClassifiedReferences } from './readWriteReferencesEngine';
+
+
+const VIEW_ID = "go-pack-go.referencesView";
 
 interface VsCodeTableTestScenarioCommandArgument {
   readonly uri: vscode.Uri;
@@ -60,8 +56,22 @@ export function activate(context: vscode.ExtensionContext): void {
   const goMainLogger = createGoMainLogger();
   const goMainCodeLensProvider = new GoMainVsCodeCodeLensProvider();
   const goMainRefreshDisposable = registerGoMainCodeLensRefresh(context, goMainCodeLensProvider);
-  const readWriteReferencesController = new ReadWriteReferencesController(context.extensionUri);
-  const alternativeDefinitionFallbackManager = new AlternativeDefinitionFallbackManager(context);
+  const filterState = new FilterState();
+  const treeProvider = new ReferencesTreeProvider(filterState);
+  const previewController = new PreviewController();
+
+  const DOUBLE_CLICK_MS = 250;
+  let lastClick: { key: string; time: number } | undefined;
+
+  const treeView = vscode.window.createTreeView(VIEW_ID, {
+    treeDataProvider: treeProvider,
+  });
+
+  const treeVisibilitySub = treeView.onDidChangeVisibility((e) => {
+    if (!e.visible) {
+      void previewController.closePreviewTab();
+    }
+  });
 
   context.subscriptions.push(
     vscode.commands.registerCommand('go-pack-go.ping', () => {
@@ -95,15 +105,6 @@ export function activate(context: vscode.ExtensionContext): void {
       goToTypeImplementationCommand,
       (argument: VsCodeGoToTypeImplementationCommandArgument) => goToTypeImplementation(argument),
     ),
-    vscode.commands.registerCommand(showSeparatedReferencesCommand, () =>
-      readWriteReferencesController.showForActiveEditor(),
-    ),
-    vscode.commands.registerCommand(enableSeparatedReferencesAlternativeDefinitionCommand, () =>
-      alternativeDefinitionFallbackManager.enableSeparatedReferencesFallback({ forcePrompt: true }),
-    ),
-    vscode.commands.registerCommand(restoreSeparatedReferencesAlternativeDefinitionCommand, () =>
-      alternativeDefinitionFallbackManager.restorePreviousSeparatedReferencesFallback(),
-    ),
     vscode.languages.registerCodeLensProvider(
       { language: 'go', scheme: '*' },
       new TableTestCodeLensProvider(),
@@ -117,11 +118,31 @@ export function activate(context: vscode.ExtensionContext): void {
       goMainCodeLensProvider,
     ),
     goMainRefreshDisposable,
-    readWriteReferencesController,
+    
+    // readWriteReferences extension
+    filterState,
+    treeProvider,
+    previewController,
+    treeView,
+    treeVisibilitySub,
+    vscode.commands.registerCommand("go-pack-go.findReferences", 
+      () => runFindReferences(treeProvider, treeView, previewController)
+    ),
+    vscode.commands.registerCommand("go-pack-go.openReference", (ref: ClassifiedReference) => {
+      const key = `${ref.uri.toString()}#${ref.range.start.line}:${ref.range.start.character}`;
+      const now = Date.now();
+      const isDouble = lastClick?.key === key && now - lastClick.time <= DOUBLE_CLICK_MS;
+      lastClick = isDouble ? undefined : { key, time: now };
+
+      return isDouble ? previewController.openPermanent(ref) : previewController.preview(ref);
+    }),
+    vscode.commands.registerCommand("go-pack-go.toggleWrite", () => filterState.toggle(RefKind.Write)),
+    vscode.commands.registerCommand("go-pack-go.toggleRead", () => filterState.toggle(RefKind.Read)),
+    vscode.commands.registerCommand("go-pack-go.toggleOther", () => filterState.toggle(RefKind.Other))
   );
 }
 
-export function deactivate(): void {}
+export function deactivate(): void { }
 
 class TableTestCodeLensProvider implements vscode.CodeLensProvider {
   async provideCodeLenses(
@@ -455,147 +476,45 @@ function registerGoMainCodeLensRefresh(
   });
 }
 
-class ReadWriteReferencesController implements vscode.Disposable {
-  private readonly aggregator = new ReadWriteReferencesAggregator();
-  private panel: ReadWriteReferencesPanel | undefined;
-  private currentResult: ReadWriteReferencesResult | undefined;
-  private currentRequest: vscode.CancellationTokenSource | undefined;
-
-  constructor(private readonly extensionUri: vscode.Uri) {}
-
-  async showForActiveEditor(): Promise<void> {
-    const editor = vscode.window.activeTextEditor;
-    if (!editor || !isGoDocument(editor.document)) {
-      void vscode.window.showErrorMessage('Read/write references are only available for Go files.');
-      return;
-    }
-
-    await this.showForDocument(editor.document, editor.selection.active);
+async function runFindReferences(
+  treeProvider: ReferencesTreeProvider,
+  treeView: vscode.TreeView<unknown>,
+  preview: PreviewController
+): Promise<void> {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) {
+    vscode.window.showInformationMessage("Open a file and place the cursor on a symbol first.");
+    return;
   }
 
-  dispose(): void {
-    this.currentRequest?.dispose();
-    this.currentRequest = undefined;
-    this.currentResult = undefined;
-    this.panel?.dispose();
-    this.panel = undefined;
-  }
+  preview.setOriginColumn(editor.viewColumn);
 
-  private getOrCreatePanel(): ReadWriteReferencesPanel {
-    if (this.panel) {
-      return this.panel;
+  const uri = editor.document.uri;
+  const position = editor.selection.active;
+  const symbolLabel = editor.document.getText(
+    editor.document.getWordRangeAtPosition(position)
+  ) || "symbol";
+
+  treeProvider.clear();
+  treeView.message = `Searching for references to ${symbolLabel}"…`;
+
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Window,
+      title: `Finding references to "${symbolLabel}"...`,
+    },
+    async (_progress, token) => {
+      const references = await findClassifiedReferences(uri, position, token);
+      treeProvider.setReferences(symbolLabel, references);
+
+      if (references.length === 0) {
+        treeView.message = `No references found for "${symbolLabel}".`;
+        void vscode.window.showInformationMessage(`Go Pack Go: no references found for "${symbolLabel}".`);
+        return;
+      }
+
+      treeView.message = treeProvider.summary() || undefined;
+      await vscode.commands.executeCommand(`${VIEW_ID}.focus`);
     }
-
-    this.panel = ReadWriteReferencesPanel.create(this.extensionUri);
-    this.panel.onDidReceiveMessage((message) => {
-      void this.handlePanelMessage(message);
-    });
-    this.panel.onDidDispose(() => {
-      this.panel = undefined;
-      this.currentResult = undefined;
-    });
-
-    return this.panel;
-  }
-
-  private async handlePanelMessage(message: ReadWriteReferencesPanelIncomingMessage): Promise<void> {
-    if (message.type === 'refreshCurrentSymbol') {
-      await this.refreshCurrentSymbol();
-      return;
-    }
-
-    if (!isReadWriteReferenceItem(message.reference)) {
-      return;
-    }
-
-    if (message.type === 'revealReference') {
-      await revealReferenceInEditor(message.reference);
-      return;
-    }
-
-    if (message.type === 'openReference') {
-      await openReferenceInEditor(message.reference);
-    }
-  }
-
-  private async refreshCurrentSymbol(): Promise<void> {
-    if (!this.currentResult) {
-      return;
-    }
-
-    const document = await vscode.workspace.openTextDocument(vscode.Uri.parse(this.currentResult.query.uri));
-    await this.showForDocument(document, toVsCodePosition(this.currentResult.query.position));
-  }
-
-  private async showForDocument(document: vscode.TextDocument, position: vscode.Position): Promise<void> {
-    const panel = this.getOrCreatePanel();
-    const tokenSource = this.beginRequest();
-
-    const result = await this.aggregator.build(document, position, tokenSource.token);
-    if (tokenSource.token.isCancellationRequested) {
-      return;
-    }
-
-    if (!result) {
-      panel.clear();
-      void vscode.window.showErrorMessage('Place the cursor on a Go symbol to show read/write references.');
-      return;
-    }
-
-    this.currentResult = result;
-    panel.reveal(result);
-  }
-
-  private beginRequest(): vscode.CancellationTokenSource {
-    this.currentRequest?.cancel();
-    this.currentRequest?.dispose();
-    this.currentRequest = new vscode.CancellationTokenSource();
-    return this.currentRequest;
-  }
-}
-
-async function revealReferenceInEditor(reference: ReadWriteReferenceItem): Promise<void> {
-  const document = await vscode.workspace.openTextDocument(vscode.Uri.parse(reference.uri));
-  const editor = await vscode.window.showTextDocument(document, {
-    preserveFocus: true,
-    preview: true,
-  });
-  const range = toVsCodeRange(reference.range);
-  editor.selection = new vscode.Selection(range.start, range.end);
-  editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
-}
-
-async function openReferenceInEditor(reference: ReadWriteReferenceItem): Promise<void> {
-  const document = await vscode.workspace.openTextDocument(vscode.Uri.parse(reference.uri));
-  const editor = await vscode.window.showTextDocument(document, {
-    preserveFocus: false,
-    preview: false,
-  });
-  const range = toVsCodeRange(reference.range);
-  editor.selection = new vscode.Selection(range.start, range.end);
-  editor.revealRange(range, vscode.TextEditorRevealType.InCenterIfOutsideViewport);
-}
-
-function isReadWriteReferenceItem(value: unknown): value is ReadWriteReferenceItem {
-  const reference = value as Partial<ReadWriteReferenceItem>;
-
-  return (
-    typeof reference.uri === 'string' &&
-    isSourceRange(reference.range) &&
-    (reference.classification === 'read' ||
-      reference.classification === 'write' ||
-      reference.classification === 'read-write')
   );
-}
-
-function isSourceRange(value: unknown): value is SourceRange {
-  const range = value as Partial<SourceRange>;
-
-  return isSourcePosition(range.start) && isSourcePosition(range.end);
-}
-
-function isSourcePosition(value: unknown): value is SourceRange['start'] {
-  const position = value as Partial<SourceRange['start']>;
-
-  return typeof position.line === 'number' && typeof position.character === 'number';
 }

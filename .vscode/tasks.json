@@ -5,8 +5,16 @@
       "type": "npm",
       "script": "compile",
       "group": "build",
-      "problemMatcher": "$tsc",
+      "problemMatcher": "$esbuild",
       "label": "npm: compile"
+    },
+    {
+      "type": "npm",
+      "script": "watch",
+      "group": "build",
+      "problemMatcher": "$esbuild-watch",
+      "isBackground": true,
+      "label": "npm: watch"
     }
   ]
 }
