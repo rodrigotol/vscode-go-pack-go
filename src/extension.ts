@@ -27,6 +27,14 @@ import {
   goToTypeImplementationCommand,
 } from './typeImplementationCodeLens';
 import { detectTypeImplementations, TypeImplementationTargetKind } from './typeImplementationDetector';
+import { FilterState } from './readWriteReferencesFilterState';
+import { ReferencesTreeProvider } from './readWriteReferencesTreeProvider';
+import { PreviewController } from './readWriteReferencesPreviewController';
+import { ClassifiedReference, RefKind } from './readWriteReferencesTypes';
+import { findClassifiedReferences } from './readWriteReferencesEngine';
+
+
+const VIEW_ID = "go-pack-go.referencesView";
 
 interface VsCodeTableTestScenarioCommandArgument {
   readonly uri: vscode.Uri;
@@ -48,6 +56,22 @@ export function activate(context: vscode.ExtensionContext): void {
   const goMainLogger = createGoMainLogger();
   const goMainCodeLensProvider = new GoMainVsCodeCodeLensProvider();
   const goMainRefreshDisposable = registerGoMainCodeLensRefresh(context, goMainCodeLensProvider);
+  const filterState = new FilterState();
+  const treeProvider = new ReferencesTreeProvider(filterState);
+  const previewController = new PreviewController();
+
+  const DOUBLE_CLICK_MS = 250;
+  let lastClick: { key: string; time: number } | undefined;
+
+  const treeView = vscode.window.createTreeView(VIEW_ID, {
+    treeDataProvider: treeProvider,
+  });
+
+  const treeVisibilitySub = treeView.onDidChangeVisibility((e) => {
+    if (!e.visible) {
+      void previewController.closePreviewTab();
+    }
+  });
 
   context.subscriptions.push(
     vscode.commands.registerCommand('go-pack-go.ping', () => {
@@ -94,10 +118,31 @@ export function activate(context: vscode.ExtensionContext): void {
       goMainCodeLensProvider,
     ),
     goMainRefreshDisposable,
+    
+    // readWriteReferences extension
+    filterState,
+    treeProvider,
+    previewController,
+    treeView,
+    treeVisibilitySub,
+    vscode.commands.registerCommand("go-pack-go.findReferences", 
+      () => runFindReferences(treeProvider, treeView, previewController)
+    ),
+    vscode.commands.registerCommand("go-pack-go.openReference", (ref: ClassifiedReference) => {
+      const key = `${ref.uri.toString()}#${ref.range.start.line}:${ref.range.start.character}`;
+      const now = Date.now();
+      const isDouble = lastClick?.key === key && now - lastClick.time <= DOUBLE_CLICK_MS;
+      lastClick = isDouble ? undefined : { key, time: now };
+
+      return isDouble ? previewController.openPermanent(ref) : previewController.preview(ref);
+    }),
+    vscode.commands.registerCommand("go-pack-go.toggleWrite", () => filterState.toggle(RefKind.Write)),
+    vscode.commands.registerCommand("go-pack-go.toggleRead", () => filterState.toggle(RefKind.Read)),
+    vscode.commands.registerCommand("go-pack-go.toggleOther", () => filterState.toggle(RefKind.Other))
   );
 }
 
-export function deactivate(): void {}
+export function deactivate(): void { }
 
 class TableTestCodeLensProvider implements vscode.CodeLensProvider {
   async provideCodeLenses(
@@ -429,4 +474,47 @@ function registerGoMainCodeLensRefresh(
       subscription.dispose();
     }
   });
+}
+
+async function runFindReferences(
+  treeProvider: ReferencesTreeProvider,
+  treeView: vscode.TreeView<unknown>,
+  preview: PreviewController
+): Promise<void> {
+  const editor = vscode.window.activeTextEditor;
+  if (!editor) {
+    vscode.window.showInformationMessage("Open a file and place the cursor on a symbol first.");
+    return;
+  }
+
+  preview.setOriginColumn(editor.viewColumn);
+
+  const uri = editor.document.uri;
+  const position = editor.selection.active;
+  const symbolLabel = editor.document.getText(
+    editor.document.getWordRangeAtPosition(position)
+  ) || "symbol";
+
+  treeProvider.clear();
+  treeView.message = `Searching for references to ${symbolLabel}"…`;
+
+  await vscode.window.withProgress(
+    {
+      location: vscode.ProgressLocation.Window,
+      title: `Finding references to "${symbolLabel}"...`,
+    },
+    async (_progress, token) => {
+      const references = await findClassifiedReferences(uri, position, token);
+      treeProvider.setReferences(symbolLabel, references);
+
+      if (references.length === 0) {
+        treeView.message = `No references found for "${symbolLabel}".`;
+        void vscode.window.showInformationMessage(`Go Pack Go: no references found for "${symbolLabel}".`);
+        return;
+      }
+
+      treeView.message = treeProvider.summary() || undefined;
+      await vscode.commands.executeCommand(`${VIEW_ID}.focus`);
+    }
+  );
 }

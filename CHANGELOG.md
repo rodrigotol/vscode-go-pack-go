@@ -3,7 +3,12 @@
 All notable changes to this extension pack will be documented in this file.
 
 ## 0.0.1
-
+- Read-Write Reference Panel v2 [#25](https://github.com/rodrigotol/vscode-go-pack-go/pull/25)
+- Finished Read-Write Reference Panel [#24](https://github.com/rodrigotol/vscode-go-pack-go/pull/24)
+- Added Fallback settings to Read-Write Reference Panel [#23](https://github.com/rodrigotol/vscode-go-pack-go/pull/23)
+- Wired Read-Write Reference Panel [#22](https://github.com/rodrigotol/vscode-go-pack-go/pull/22)
+- Added Read-Write Reference Panel UI [#21](https://github.com/rodrigotol/vscode-go-pack-go/pull/21)
+- Prepared Read-Write Reference Panel [#20](https://github.com/rodrigotol/vscode-go-pack-go/pull/20)
 - Finished implementing go main runner  [#19](https://github.com/rodrigotol/vscode-go-pack-go/pull/19)
 - Added launch configs go main runner [#18](https://github.com/rodrigotol/vscode-go-pack-go/pull/18)
 - Added go main runner codelens [#17](https://github.com/rodrigotol/vscode-go-pack-go/pull/17)
