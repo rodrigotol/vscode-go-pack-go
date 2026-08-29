@@ -4,20 +4,43 @@
   "description": "VS Code Go productivity features for table tests, type implementations, main entrypoints and enhanced find references",
   "version": "0.0.1",
   "publisher": "rodrigotol",
+  "license": "SEE LICENSE IN LICENSE.txt",
+  "homepage": "https://github.com/rodrigotol/vscode-go-pack-go#readme",
+  "bugs": {
+    "url": "https://github.com/rodrigotol/vscode-go-pack-go/issues"
+  },
   "main": "./dist/extension.js",
   "engines": {
     "vscode": "^1.120.0"
   },
   "categories": [
-    "Programming Languages"
+    "Programming Languages",
+    "Testing",
+    "Debuggers"
   ],
   "keywords": [
     "go",
     "golang",
     "codelens",
     "debug",
-    "testing"
+    "testing",
+    "go test",
+    "table-driven tests",
+    "table tests",
+    "subtest",
+    "references",
+    "read write references",
+    "implementation",
+    "go to implementation",
+    "delve",
+    "go debugger",
+    "main"
   ],
+  "galleryBanner": {
+    "color": "#0E4079",
+    "theme": "dark"
+  },
+  "markdown": "github",
   "activationEvents": [
     "onLanguage:go"
   ],
@@ -122,11 +145,13 @@
     "package": "vsce package --no-dependencies",
     "compile:tests": "tsc -p tsconfig.test.json && node esbuild.js --copy-runtime-assets=out-test",
     "test:unit": "node scripts/run-tests.js",
-    "test": "npm run typecheck && npm run compile:tests && npm run test:unit"
+    "test:extension-host": "npm run package && node scripts/run-extension-host-tests.js",
+    "test": "npm run typecheck && npm run compile:tests && npm run test:unit && npm run test:extension-host"
   },
   "devDependencies": {
     "@types/node": "^20.19.41",
     "@types/vscode": "^1.120.0",
+    "@vscode/test-electron": "^3.1.0",
     "@vscode/vsce": "^3.9.2",
     "esbuild": "^0.28.0",
     "typescript": "^5.5.2"

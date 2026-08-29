@@ -74,7 +74,7 @@ The VSIX must contain the manifest, README, license, icon, `extension/dist/exten
 2. [x] Keep extension production bundling separate from test compilation.
 3. [x] Update `test` to compile tests and invoke Node's test runner only against emitted test files.
 4. [x] Add a guard that fails when no tests are discovered.
-5. [ ] Add at least one VS Code extension-host smoke test covering activation and the registered contributions.
+5. [x] Add a VS Code extension-host smoke test covering activation and the registered contributions.
 
 Suggested scripts (exact names may vary):
 
@@ -95,7 +95,7 @@ Acceptance criteria:
 
 - [x] Test output names the compiled test files and reports more than zero tests.
 - [x] Unit tests pass locally (14 test files on 2026-08-29).
-- [ ] Extension-host tests activate the packaged extension and check that its principal commands/providers are available.
+- [x] Extension-host tests activate the packaged extension and check that its principal commands/providers are available.
 
 ### 3. Document the actual product
 
@@ -121,7 +121,11 @@ Add `SUPPORT.md` if support instructions would be more useful as a separate Mark
 
 Update `CHANGELOG.md` so the release section communicates user-facing additions and fixes rather than an internal PR-by-PR history.
 
+Status: documentation, prerequisites, commands, settings, limitations, and support guidance were added on 2026-08-29. Capture clean-profile screenshots or GIFs of the shipped UI before public release; do not use mock visuals as product evidence.
+
 ### 4. Finish Marketplace metadata and contribution hygiene
+
+Status: Marketplace metadata, categories, keywords, gallery banner, and GitHub Markdown mode were added on 2026-08-29. Table-test and implementation commands remain CodeLens-only because they require contextual editor arguments.
 
 Update `package.json` with:
 
