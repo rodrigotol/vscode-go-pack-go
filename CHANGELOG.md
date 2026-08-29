@@ -3,6 +3,7 @@
 All notable changes to this extension pack will be documented in this file.
 
 ## 0.0.1
+- Added publish readiness plan [#27](https://github.com/rodrigotol/vscode-go-pack-go/pull/27)
 - Added extension icon [#26](https://github.com/rodrigotol/vscode-go-pack-go/pull/26)
 - Read-Write Reference Panel v2 [#25](https://github.com/rodrigotol/vscode-go-pack-go/pull/25)
 - Finished Read-Write Reference Panel [#24](https://github.com/rodrigotol/vscode-go-pack-go/pull/24)

@@ -1,5 +1,5 @@
 import Parser = require('web-tree-sitter');
-import { createRequire } from 'module';
+import * as path from 'node:path';
 
 type Language = Parser.Language;
 type Point = Parser.Point;
@@ -18,8 +18,6 @@ export interface SourceRange {
 
 let parserRuntimePromise: Promise<void> | undefined;
 let goLanguagePromise: Promise<Language> | undefined;
-const nodeRequire = createRequire(__filename);
-
 export async function parseGoSource(source: string): Promise<Tree> {
   await ensureParserRuntime();
 
@@ -61,7 +59,7 @@ async function ensureParserRuntime(): Promise<void> {
   parserRuntimePromise ??= Parser.init({
     locateFile(fileName: string): string {
       if (fileName === 'tree-sitter.wasm') {
-        return nodeRequire.resolve('web-tree-sitter/tree-sitter.wasm');
+        return runtimeAssetPath(fileName);
       }
 
       return fileName;
@@ -73,8 +71,12 @@ async function ensureParserRuntime(): Promise<void> {
 
 async function ensureGoLanguage(): Promise<Language> {
   goLanguagePromise ??= Parser.Language.load(
-    nodeRequire.resolve('tree-sitter-wasms/out/tree-sitter-go.wasm'),
+    runtimeAssetPath('tree-sitter-go.wasm'),
   );
 
   return await goLanguagePromise;
+}
+
+function runtimeAssetPath(fileName: string): string {
+  return path.join(__dirname, fileName);
 }
