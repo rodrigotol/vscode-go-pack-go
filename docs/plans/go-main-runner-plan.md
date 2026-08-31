@@ -2,7 +2,7 @@
 
 ## Summary
 
-Add a third Go-focused feature to the existing `go-pack-go` extension: CodeLens actions that place `▶ run` and `𓆣 debug` above every saved `func main()` in files that belong to `package main`.
+Add a third Go-focused feature to the existing `go-pack-go` extension: CodeLens actions that place `▶ run` and `☼ debug` above every saved `func main()` in files that belong to `package main`.
 
 This is an integration plan for the current project, not a standalone-extension scaffold. The implementation must preserve the behavior described by the original Go Main Runner design while following this repository's existing practices:
 
@@ -57,7 +57,7 @@ The current repo is already an extension with active Go features. The new main-r
 
 - Show two CodeLenses above each detected `func main()` in a saved Go file whose package is `main`:
   - `▶ run`
-  - `𓆣 debug`
+  - `☼ debug`
 - Use the same anchor position for both lenses.
 - Return no lenses when:
   - the document is not Go
@@ -170,7 +170,7 @@ The current repo is already an extension with active Go features. The new main-r
 - Create a new CodeLens helper module for the main-runner feature.
 - Emit exactly two lenses per detected main:
   - `▶ run`
-  - `𓆣 debug`
+  - `☼ debug`
 - Keep command arguments serializable and minimal, consistent with the current project style.
 - Implement a provider with document-version caching plus an `onDidChangeCodeLenses` event.
 - Done when the provider can produce main-runner lenses without touching the existing two providers.
@@ -253,7 +253,7 @@ The current repo is already an extension with active Go features. The new main-r
 - Build the debug configuration from matched settings plus mandatory overrides.
 - Start the debug session with `vscode.debug.startDebugging`.
 - Show a clear error when debugging cannot start and mention Delve in the failure guidance.
-- Done when clicking `𓆣 debug` always targets the clicked main directory and respects matched config extras safely.
+- Done when clicking `☼ debug` always targets the clicked main directory and respects matched config extras safely.
 
 ### Task 13. Wire the feature into `src/extension.ts` - Done
 
@@ -273,10 +273,10 @@ The current repo is already an extension with active Go features. The new main-r
 ### Task 15. Perform manual verification - Done
 
 - In the Extension Development Host, verify:
-  - saved `package main` files show `▶ run` and `𓆣 debug`
+  - saved `package main` files show `▶ run` and `☼ debug`
   - dirty and untitled files do not show those lenses
   - `▶ run` executes `go run` against the clicked file's directory
-  - `𓆣 debug` starts a Go debug session against that same directory
+  - `☼ debug` starts a Go debug session against that same directory
   - exact-match launch configs are honored for `env`, `args`, `buildFlags`, and `cwd`
   - non-matching launch configs are ignored
   - table-test scenario lenses still work unchanged
@@ -285,7 +285,7 @@ The current repo is already an extension with active Go features. The new main-r
 
 ## Acceptance Criteria
 
-- [ ] Saved `package main` Go files show `▶ run` and `𓆣 debug` above each detected `main()`.
+- [ ] Saved `package main` Go files show `▶ run` and `☼ debug` above each detected `main()`.
 - [ ] Dirty, untitled, non-Go, and non-`package main` files do not show main-runner lenses.
 - [ ] Run always executes `go run <clicked-main-directory>`, not the workspace root or a config `program`.
 - [ ] Debug always uses the clicked file's directory as `program`.

@@ -3,7 +3,7 @@ import { detectGoMainFunctions, GoMainFunction, GoMainRange } from './goMainDete
 export const runGoMainCommand = 'go-pack-go.runGoMain';
 export const debugGoMainCommand = 'go-pack-go.debugGoMain';
 export const runGoMainTitle = '▶ run';
-export const debugGoMainTitle = '𓆣 debug';
+export const debugGoMainTitle = '☼ debug';
 
 export interface GoMainCodeLensCommandArgument {
   readonly uri: string;

@@ -10,9 +10,13 @@ In supported Go table tests, Go Pack Go places **run test** and **debug test** C
 
 The detector follows `t.Run` calls inside `TestXxx` functions and supports common slice and map table literals, including named case types, keyed `name` fields, and statically known labels.
 
+![table-test](./resources/test_table.png)
+
 ### Navigate type implementations
 
 Go Pack Go adds a **go to implementation** CodeLens to Go structs, interfaces, receiver methods, and interface methods. It opens VS Code's standard implementation navigation, using the Go language tooling already available in your workspace.
+
+![go to implementation](./resources/go_to_implementation.png)
 
 ### Run and debug `func main()`
 
@@ -22,6 +26,8 @@ Saved files in `package main` get **run** and **debug** CodeLens actions above e
 - **Debug** starts a Go launch configuration for that same directory.
 - If a matching `.vscode/launch.json` configuration exists, its `env`, `buildFlags`, `args`, and `cwd` are used; it cannot redirect the program away from the selected main package.
 
+![run and debug](./resources/main_run.png)
+
 ### Review references by intent
 
 Use **Go to References (Go Pack Go)** from the editor context menu to open the **Go Pack Go - References** panel. Results are grouped in one list and marked as write, read, or other usage.
@@ -30,6 +36,8 @@ Use **Go to References (Go Pack Go)** from the editor context menu to open the *
 - Single-click a result to preview it beside the current editor.
 - Double-click the same result to open it permanently in the original editor group.
 - The temporary preview closes when the references panel is hidden.
+
+![references by intent](./resources/reference_by_intent.gif)
 
 ## Installation and prerequisites
 
@@ -67,10 +75,6 @@ The table-test and implementation actions intentionally remain CodeLens-only. Th
 - Reference classification uses document highlights. A provider can report an item as **other** when it does not expose a read/write highlight.
 - Main-package actions require a saved Go file in `package main` within a workspace folder. Dirty, untitled, and non-main files do not receive those actions.
 - This release has been verified for local, file-backed workspaces. Untrusted, virtual, remote, and multi-root workspace support is not yet declared; see the project issues for the current support policy.
-
-## Visual guide
-
-The extension's CodeLens and references-panel interactions are described above. Capture clean-profile screenshots or GIFs of the shipped UI before the public release; do not use mock visuals as product evidence.
 
 ## Support and feedback
 
